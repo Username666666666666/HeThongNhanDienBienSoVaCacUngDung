@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Filter, Download, Search, Calendar, User, Clock,
   Car, MapPin, DollarSign, Image as ImageIcon, CheckCircle, XCircle, Coins
 } from 'lucide-react';
-import { mockParkingSessions } from '../../store/mockData';
-import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
+import { mockParkingSessions } from '../../store/mockData.ts';
+import { ImageWithFallback } from '../../components/figma/ImageWithFallback.tsx';
 
 export const ParkingHistory = () => {
   const navigate = useNavigate();

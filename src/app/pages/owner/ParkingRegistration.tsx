@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, MapPin, Star, Search, Clock, 
   Coins, CheckCircle, AlertCircle, Calendar,
   ChevronRight, Info, DollarSign
 } from 'lucide-react';
-import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/figma/ImageWithFallback.tsx';
 import { toast } from 'sonner';
 
 interface ParkingLotData {

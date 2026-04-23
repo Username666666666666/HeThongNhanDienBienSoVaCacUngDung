@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Send, Users, AlertTriangle, Image as ImageIcon, Paperclip
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ChatMessage } from '../../types/community';
-import { useAuth } from '../../context/AuthContext';
+import type { ChatMessage } from '../../types/community.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
 
 
 export const CommunityChat = () => {

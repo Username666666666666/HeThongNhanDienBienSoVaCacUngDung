@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Coins, Trophy, Clock, Users, Play, Plus, AlertTriangle, Gamepad2 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { CoinGame } from '../../types/community';
-import { useAuth } from '../../context/AuthContext';
+import type { CoinGame } from '../../types/community.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
 
 export const CoinGames = () => {
   const navigate = useNavigate();

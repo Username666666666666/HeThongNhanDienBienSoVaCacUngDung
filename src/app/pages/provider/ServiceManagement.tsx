@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Building2, CheckCircle, 
   Calendar, DollarSign, Search, Filter, Package, Coins, XCircle 

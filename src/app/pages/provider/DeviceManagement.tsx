@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Camera, Server, Wifi, AlertCircle, 
   CheckCircle, Search, Plus, Edit, Trash2, Power

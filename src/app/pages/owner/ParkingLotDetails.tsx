@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   ArrowLeft,
   MapPin,
@@ -19,8 +19,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
-import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
-import { supabase } from '../../utils/supabase';
+import { ImageWithFallback } from '../../components/figma/ImageWithFallback.tsx';
+import { supabase } from '../../utils/supabase.ts';
 
 
 type PriceType = 'fixed' | 'hourly' | 'daily';
@@ -65,6 +65,7 @@ interface ParkingPricingView {
   price: number;
   coinPrice: number;
   isVirtualCoin: boolean;
+  vehicleType: 'car' | 'motorcycle'; // 👈 thêm dòng này
 }
 
 interface FacilityView {
@@ -292,14 +293,16 @@ const lotId = String(lot.mabaido ?? rawId);
         0,
       );
 
-      const transformedPricing: ParkingPricingView[] = (pricingRows ?? []).map((row: any) => ({
-        mabanggia: row.mabanggia,
-        type: row.loaixe ?? row.type ?? 'Không rõ',
-        priceType: (row.loaigia ?? 'fixed') as PriceType,
-        price: Number(row.thanhtien ?? row.price ?? 0),
-        coinPrice: Number(coinMap.get(String(row.mabanggia)) ?? row.giaxu ?? 0),
-        isVirtualCoin: Boolean(row.thanhtoanxuao),
-      }));
+    const transformedPricing: ParkingPricingView[] = (pricingRows ?? []).map((row: any) => ({
+  mabanggia: row.mabanggia,
+  type: row.loaixe ?? row.type ?? 'Không rõ',
+  priceType: (row.loaigia ?? 'fixed') as PriceType,
+  price: Number(row.thanhtien ?? row.price ?? 0),
+  coinPrice: Number(coinMap.get(String(row.mabanggia)) ?? row.giaxu ?? 0),
+  isVirtualCoin: Boolean(row.thanhtoanxuao),
+
+  vehicleType: row.kieuxe === 'motorcycle' ? 'motorcycle' : 'car', // 👈 thêm dòng này
+}));
 
   const { data: facilityRows, error: facilityErr } = await supabase
   .from('tienich')
@@ -658,11 +661,7 @@ const getSpotVehicleLabel = (spot: ParkingSpotView) => {
 
               <div className="space-y-3">
                 {sortedPricing.map((item) => {
-                  const Icon = item.type.toLowerCase().includes('xe máy') || item.type.toLowerCase().includes('motor')
-                    ? Bike
-                    : item.type.toLowerCase().includes('xe tải') || item.type.toLowerCase().includes('truck')
-                      ? Truck
-                      : Car;
+                  const Icon = item.vehicleType === 'motorcycle' ? Bike : Car;
 
                   return (
                     <div

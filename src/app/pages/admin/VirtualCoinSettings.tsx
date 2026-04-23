@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Coins, Gift, TrendingUp, 
   Settings, Save, Plus, Edit, Trash2, 
@@ -118,7 +118,7 @@ export const VirtualCoinSettings = () => {
               <div className="flex-1">
                 <h3 className="text-lg text-gray-900 mb-2">Chấp nhận thanh toán bằng xu ảo</h3>
                 <p className="text-sm text-gray-600">
-                  Cho phép chủ xe sử dụng xu ảo để thanh toán phí đỗ xe tại bãi của bạn
+                  Cho phép Người dùng sử dụng xu ảo để thanh toán phí đỗ xe tại bãi của bạn
                 </p>
               </div>
               <button

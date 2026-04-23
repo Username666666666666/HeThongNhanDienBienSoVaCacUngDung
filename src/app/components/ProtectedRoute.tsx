@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { Navigate, useLocation, Outlet } from 'react-router';
+import { Navigate, useLocation, Outlet } from 'react-router-dom';
 import { supabase } from '../utils/supabase';
 
 interface NguoiDung {

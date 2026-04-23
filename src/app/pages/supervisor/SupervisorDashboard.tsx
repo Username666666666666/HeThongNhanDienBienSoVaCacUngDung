@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { Monitor, Video, User, Bell, BarChart3, Clock, FileText, AlertTriangle, GitMerge } from 'lucide-react';
 
 export const SupervisorDashboard = () => {

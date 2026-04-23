@@ -1,10 +1,10 @@
 import { useState, useRef } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Camera, Check, X, DollarSign, MapPin, Upload, Users,
   Clock, AlertCircle, Video, Coins, BadgeCheck
 } from 'lucide-react';
-import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/figma/ImageWithFallback.tsx';
 import { toast } from 'sonner';
 
 interface ScannedVehicle {
@@ -78,7 +78,7 @@ export const GateManagement = () => {
           setScanning(false);
           toast.success(
             isDuplicate
-              ? 'Phát hiện 2 chủ xe cùng biển số! Vui lòng chọn chủ xe đúng.'
+              ? 'Phát hiện 2 Người dùng cùng biển số! Vui lòng chọn Người dùng đúng.'
               : 'Đã nhận diện biển số thành công!'
           );
         }, 2000);
@@ -118,7 +118,7 @@ export const GateManagement = () => {
       return;
     }
     if (scannedData.possibleOwners && !selectedOwner) {
-      toast.error('Vui lòng chọn chủ xe đúng');
+      toast.error('Vui lòng chọn Người dùng đúng');
       return;
     }
 
@@ -224,7 +224,7 @@ export const GateManagement = () => {
                 ⚠️ Phát hiện trùng biển số!
               </h3>
               <p className="text-sm text-gray-600">
-                Có {scannedData.possibleOwners.length} chủ xe cùng biển số này. Vui lòng chọn chủ xe đúng dựa trên thông tin người vào bãi.
+                Có {scannedData.possibleOwners.length} Người dùng cùng biển số này. Vui lòng chọn Người dùng đúng dựa trên thông tin người vào bãi.
               </p>
             </div>
           </div>

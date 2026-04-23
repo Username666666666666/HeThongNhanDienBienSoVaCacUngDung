@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { Chrome, Facebook, Eye, EyeOff, Car } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../utils/supabase';
+import { supabase } from '../utils/supabase.ts';
 
 export const Login = () => {
   const navigate = useNavigate();
@@ -13,10 +13,18 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
 
   // 🔐 ĐĂNG NHẬP EMAIL/PASSWORD
-  const handleLogin = async (e: React.FormEvent) => {
+const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    
+    // 🔍 Biểu thức chính quy kiểm tra định dạng email tổng quát
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+    if (!emailRegex.test(email)) {
+      toast.error('Vui lòng nhập đúng định dạng email (ví dụ: user@domain.com)');
+      return;
+    }
+
+    setLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
@@ -25,7 +33,7 @@ export const Login = () => {
 
       if (error) throw error;
 
-      // 👉 Lấy chucnang từ bảng nguoidung bằng manguoidung
+      // ... (giữ nguyên phần lấy userData và điều hướng)
       const { data: userData, error: dbError } = await supabase
         .from('nguoidung')
         .select('chucnang')
@@ -33,7 +41,6 @@ export const Login = () => {
         .single();
 
       if (dbError) {
-        // Trường hợp login thành công nhưng profile chưa tạo kịp (do delay trigger)
         console.error('Lỗi lấy profile:', dbError);
         toast.error('Không tìm thấy thông tin vai trò người dùng');
         setLoading(false);
@@ -41,7 +48,6 @@ export const Login = () => {
       }
 
       toast.success('Đăng nhập thành công');
-      // 👉 Chuyển hướng theo chucnang (owner, user, v.v.)
       navigate(`/${userData.chucnang}`);
 
     } catch (err: any) {

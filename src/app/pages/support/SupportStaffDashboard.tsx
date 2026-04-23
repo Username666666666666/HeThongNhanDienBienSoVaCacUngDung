@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   Shield, MessageSquare, Users, AlertTriangle, FileText, 
   Clock, CheckCircle, XCircle, Search, Filter, Eye,
@@ -7,7 +7,7 @@ import {
   MapPin, Building2
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { CommunityMember, CommunityPost, TheftReport } from '../../types/community';
+import type { CommunityMember, CommunityPost, TheftReport } from '../../types/community.ts';
 
 export const SupportStaffDashboard = () => {
   const navigate = useNavigate();
@@ -141,7 +141,7 @@ export const SupportStaffDashboard = () => {
   ...(r.updates || []),
   {
     id: Date.now().toString(),
-    staffId: currentstaff.manguoidung,
+    staffId: currentStaff.manguoidung,
     staffName: currentStaff.name,
     staffRole: currentStaff.role,
     content: update,

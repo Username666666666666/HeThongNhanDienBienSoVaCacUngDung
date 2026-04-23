@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Package, Check, AlertCircle, Building2, 
   Info, Coins, CheckCircle, X, RefreshCw, Calendar

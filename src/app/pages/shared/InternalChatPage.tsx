@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, MessageSquare, Send, Users, Plus, Search, 
   AlertTriangle, DollarSign, UserPlus, X, Camera, FileText,
   TrendingUp, TrendingDown, Shield, Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/AuthContext.tsx';
 
 interface ChatRoom {
   id: string;

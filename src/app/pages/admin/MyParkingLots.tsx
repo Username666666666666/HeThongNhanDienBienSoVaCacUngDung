@@ -1,9 +1,9 @@
 
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { ArrowLeft, ArrowRight, Building2, CalendarRange, Clock, Eye, EyeOff, Filter, Grid3x3, Layers3, MapPin, Search, Star, Users } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowLeft, ArrowRight, Building2, CalendarRange, Clock, Eye, EyeOff, Filter, Grid3x3, Layers3, MapPin, Search, Star, Users, Plus } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../../utils/supabase';
+import { supabase } from '../../utils/supabase.ts';
 
 // ================================
 // TYPES
@@ -50,6 +50,7 @@ type PricingRow = {
   thanhtien: number;
   thanhtoanxuao: boolean;
   mabaido: string;
+  kieuxe: 'car' | 'motorcycle';
 };
 
 type CoinRow = {
@@ -86,7 +87,8 @@ amenities: AmenityRow[];
 };
 
 const currency = new Intl.NumberFormat('vi-VN');
-const formatMoney = (value?: number | null) => `${currency.format(Number(value ?? 0))} ₫`;
+const formatMoney = (value?: number | null) =>
+  `${currency.format(Number(value ?? 0))} ₫`;
 
 const lotStatusLabel = (publicValue: boolean) => (publicValue ? 'Đang công khai' : 'Đang ẩn');
 
@@ -121,7 +123,7 @@ const [
 ] = await Promise.all([
   supabase.from('khuvudo').select('makhuvuc, tenkhuvuc, hinhkhuvuc, mota, mabaido').in('mabaido', lotIds),
   supabase.from('tienich').select('matienich, mabaido, ten_tien_ich').in('mabaido', lotIds),
-  supabase.from('banggia').select('mabanggia, loaixe, loaigia, thanhtien, thanhtoanxuao, mabaido').in('mabaido', lotIds),
+  supabase.from('banggia').select('mabanggia, loaixe, loaigia, thanhtien, thanhtoanxuao, mabaido, kieuxe').in('mabaido', lotIds),
   supabase.from('phuongtienhotro').select('makhuvuc, mabanggia')
 ]);
 if (supportError) throw supportError;
@@ -410,7 +412,7 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
 }
 
 function LotCard({ lot, onEdit, onDetails }: { lot: ParkingLot; onEdit: () => void; onDetails: () => void }) {
-  const vehicleTypes = new Set(lot.pricing.map((p: any) => p.loaixe).filter(Boolean));
+  const vehicleTypes = new Set(lot.pricing.map((p: any) => p.kieuxe).filter(Boolean));
   return (
     <div className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-xl hover:border-purple-300 transition-all">
       <div className="relative h-56 bg-gray-100">
@@ -724,19 +726,18 @@ function LotMediaForm({ lot, onSaved }: { lot: any; onSaved: () => void }) {
 function ZoneManager({ lot, onRefresh }: { lot: any; onRefresh: () => void }) {
   const [savingZoneId, setSavingZoneId] = useState<string | null>(null);
 
-  const updateZone = async (zoneId: string, payload: Record<string, any>) => {
-    setSavingZoneId(zoneId);
-    try {
-      const { error } = await supabase.from('khuvudo').update(payload).eq('makhuvuc', zoneId);
-      if (error) throw error;
-      toast.success('Đã lưu sân đỗ');
-      onRefresh();
-    } catch (error: any) {
-      toast.error(error?.message ?? 'Lưu khu vực thất bại');
-    } finally {
-      setSavingZoneId(null);
-    }
-  };
+ const updateZone = async (zoneId: string, payload: Record<string, any>) => {
+  setSavingZoneId(zoneId);
+  try {
+    const { error } = await supabase.from('khuvudo').update(payload).eq('makhuvuc', zoneId);
+    if (error) throw error;
+    toast.success('Đã lưu sân đỗ');
+  } catch (error: any) {
+    toast.error(error?.message ?? 'Lưu khu vực thất bại');
+  } finally {
+    setSavingZoneId(null);
+  }
+};
 
   const deleteZone = async (zone: any) => {
     if (!window.confirm(`Xóa sân đỗ "${zone.tenkhuvuc}" cùng toàn bộ vị trí bên trong?`)) return;
@@ -764,36 +765,93 @@ function ZoneManager({ lot, onRefresh }: { lot: any; onRefresh: () => void }) {
   );
 }
 
-function ZoneEditor({ zone, onSave, onDelete, saving, onRefresh, lotId }: { zone: any; onSave: (id: string, payload: Record<string, any>) => void; onDelete: (zone: any) => void; saving: boolean; onRefresh: () => void; lotId: string }) {
+type DraftSpot = {
+  id: string;
+  mavitri?: string;
+  tenvitri: string;
+  trangthai: number;
+  mabanggia: string | null;
+};
+
+function ZoneEditor({
+  zone,
+  onSave,
+  onDelete,
+  saving,
+  onRefresh,
+  lotId,
+}: {
+  zone: any;
+  onSave: (id: string, payload: Record<string, any>) => Promise<void> | void;
+  onDelete: (zone: any) => void;
+  saving: boolean;
+  onRefresh: () => void;
+  lotId: string;
+}) {
   const [name, setName] = useState(zone.tenkhuvuc ?? '');
   const [desc, setDesc] = useState(zone.mota ?? '');
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [supported, setSupported] = useState<string[]>(zone.supportedVehicleTypes ?? []);
   const [pricingOptions, setPricingOptions] = useState<any[]>([]);
+  const [draftSpots, setDraftSpots] = useState<DraftSpot[]>(
+    (zone.spots ?? []).map((s: any) => ({
+      id: s.mavitri,
+      mavitri: s.mavitri,
+      tenvitri: s.tenvitri,
+      trangthai: Number(s.trangthai ?? 0),
+      mabanggia: s.mabanggia ?? null,
+    }))
+  );
   const [uploading, setUploading] = useState(false);
-  
+  const originalSpotIdsRef = useRef<string[]>(
+    (zone.spots ?? []).map((s: any) => s.mavitri).filter(Boolean)
+  );
 
   useEffect(() => {
     setName(zone.tenkhuvuc ?? '');
     setDesc(zone.mota ?? '');
     setSupported(zone.supportedVehicleTypes ?? []);
+    setDraftSpots(
+      (zone.spots ?? []).map((s: any) => ({
+        id: s.mavitri,
+        mavitri: s.mavitri,
+        tenvitri: s.tenvitri,
+        trangthai: Number(s.trangthai ?? 0),
+        mabanggia: s.mabanggia ?? null,
+      }))
+    );
+    originalSpotIdsRef.current = (zone.spots ?? []).map((s: any) => s.mavitri).filter(Boolean);
     loadPricing();
   }, [zone.makhuvuc]);
 
   const loadPricing = async () => {
-    const { data } = await supabase.from('banggia').select('mabanggia, loaixe, mabaido').eq('mabaido', lotId);
+    const { data } = await supabase
+      .from('banggia')
+      .select('mabanggia, loaixe, loaigia, kieuxe, mabaido')
+      .eq('mabaido', lotId);
+
     setPricingOptions(data ?? []);
   };
 
   const syncSupport = async (zoneId: string, nextTypes: string[]) => {
-    const { data: allPricing } = await supabase.from('banggia').select('mabanggia, loaixe').eq('mabaido', lotId);
+    const { data: allPricing } = await supabase
+      .from('banggia')
+      .select('mabanggia, loaixe')
+      .eq('mabaido', lotId);
+
     const selectedIds = (allPricing ?? [])
       .filter((p: any) => nextTypes.includes(p.loaixe))
       .map((p: any) => p.mabanggia);
 
     await supabase.from('phuongtienhotro').delete().eq('makhuvuc', zoneId);
+
     if (selectedIds.length) {
-      await supabase.from('phuongtienhotro').insert(selectedIds.map((mabanggia) => ({ makhuvuc: zoneId, mabanggia })));
+      await supabase.from('phuongtienhotro').insert(
+        selectedIds.map((mabanggia) => ({
+          makhuvuc: zoneId,
+          mabanggia,
+        }))
+      );
     }
   };
 
@@ -811,18 +869,73 @@ function ZoneEditor({ zone, onSave, onDelete, saving, onRefresh, lotId }: { zone
     }
   };
 
+  const addSpot = (mabanggia: string | null = null) => {
+    const nextNumber = draftSpots.length + 1;
+    const nextName = `${name || 'A'}${String(nextNumber).padStart(3, '0')}`;
+
+    setDraftSpots((prev) => [
+      ...prev,
+      {
+        id: `tmp_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        tenvitri: nextName,
+        trangthai: 0,
+        mabanggia,
+      },
+    ]);
+  };
+
+  const applyPricingToAll = (mabanggia: string | null) => {
+    setDraftSpots((prev) => prev.map((spot) => ({ ...spot, mabanggia })));
+  };
+
+  const updateSpot = (spotId: string, patch: Partial<DraftSpot>) => {
+    setDraftSpots((prev) => prev.map((spot) => (spot.id === spotId ? { ...spot, ...patch } : spot)));
+  };
+
+  const removeSpot = (spotId: string) => {
+    setDraftSpots((prev) => prev.filter((spot) => spot.id !== spotId));
+  };
+
   const save = async () => {
     const imageUrl = imageFile ? await uploadZoneImage() : undefined;
+
     await onSave(zone.makhuvuc, {
       tenkhuvuc: name,
       mota: desc,
       ...(imageUrl ? { hinhkhuvuc: imageUrl } : {}),
     });
+
     if (JSON.stringify(supported) !== JSON.stringify(zone.supportedVehicleTypes ?? [])) {
       await syncSupport(zone.makhuvuc, supported);
-      toast.success('Đã đồng bộ phương tiện hỗ trợ');
-      onRefresh();
     }
+
+    const currentDbSpotIds = draftSpots.map((s) => s.mavitri).filter(Boolean) as string[];
+    const removedIds = originalSpotIdsRef.current.filter((id) => !currentDbSpotIds.includes(id));
+
+    if (removedIds.length > 0) {
+      const { error } = await supabase.from('vitrido').delete().in('mavitri', removedIds);
+      if (error) throw error;
+    }
+
+    for (const spot of draftSpots) {
+      const payload = {
+        tenvitri: spot.tenvitri,
+        trangthai: Number(spot.trangthai ?? 0),
+        makhuvuc: zone.makhuvuc,
+        mabanggia: spot.mabanggia || null,
+      };
+
+      if (spot.mavitri) {
+        const { error } = await supabase.from('vitrido').update(payload).eq('mavitri', spot.mavitri);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('vitrido').insert(payload);
+        if (error) throw error;
+      }
+    }
+
+    toast.success('Đã lưu sân đỗ');
+    onRefresh();
   };
 
   return (
@@ -830,47 +943,46 @@ function ZoneEditor({ zone, onSave, onDelete, saving, onRefresh, lotId }: { zone
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-xl font-bold text-gray-900">{zone.tenkhuvuc}</h3>
-          <p className="text-sm text-gray-500">Ảnh sân, mô tả, loại xe được đỗ và vị trí trong sân.</p>
+          <p className="text-sm text-gray-500">Ảnh sân, mô tả, loại xe hỗ trợ, vị trí đỗ và gán bảng giá.</p>
         </div>
-        <button onClick={() => onDelete(zone)} className="px-4 py-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 font-semibold text-sm">
+        <button
+          onClick={() => onDelete(zone)}
+          className="px-4 py-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 font-semibold text-sm"
+        >
           Xóa sân
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Field label="Tên khu vực" value={name} onChange={setName} />
-    <div>
-  <label className="block text-sm mb-2 text-gray-700 font-medium">Ảnh khu vực</label>
 
-  {/* Preview ảnh hiện tại */}
-  {zone.hinhkhuvuc && (
-    <div className="mb-3 rounded-xl overflow-hidden border border-gray-200">
-      <img
-        src={zone.hinhkhuvuc}
-        alt={zone.tenkhuvuc}
-        className="w-full h-40 object-cover"
-      />
-    </div>
-  )}
+        <div>
+          <label className="block text-sm mb-2 text-gray-700 font-medium">Ảnh khu vực</label>
 
-  {/* Preview ảnh vừa chọn (chưa upload) */}
-  {imageFile && (
-    <div className="mb-3 rounded-xl overflow-hidden border border-blue-200">
-      <img
-        src={URL.createObjectURL(imageFile)}
-        alt="preview"
-        className="w-full h-40 object-cover"
-      />
-    </div>
-  )}
+          {zone.hinhkhuvuc && (
+            <div className="mb-3 rounded-xl overflow-hidden border border-gray-200">
+              <img src={zone.hinhkhuvuc} alt={zone.tenkhuvuc} className="w-full h-40 object-cover" />
+            </div>
+          )}
 
-  <input
-    type="file"
-    accept="image/*"
-    onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
-    className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white"
-  />
-</div>
+          {imageFile && (
+            <div className="mb-3 rounded-xl overflow-hidden border border-blue-200">
+              <img
+                src={URL.createObjectURL(imageFile)}
+                alt="preview"
+                className="w-full h-40 object-cover"
+              />
+            </div>
+          )}
+
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
+            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white"
+          />
+        </div>
+
         <Field label="Mô tả khu vực" value={desc} onChange={setDesc} textarea className="md:col-span-2" />
       </div>
 
@@ -878,40 +990,110 @@ function ZoneEditor({ zone, onSave, onDelete, saving, onRefresh, lotId }: { zone
         <label className="block text-sm mb-2 text-gray-700 font-medium">Phương tiện hỗ trợ</label>
         <div className="flex flex-wrap gap-2">
           {(pricingOptions ?? []).map((p: any) => (
-            <label key={p.mabanggia} className="inline-flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-200 cursor-pointer">
-              <input type="checkbox" checked={supported.includes(p.loaixe)} onChange={(e) => setSupported((prev) => (e.target.checked ? [...prev, p.loaixe] : prev.filter((x) => x !== p.loaixe)))} />
-              <span className="text-sm text-gray-700">{p.loaixe}</span>
+            <label
+              key={p.mabanggia}
+              className="inline-flex items-center gap-2 bg-gray-50 px-3 py-2 rounded-xl border border-gray-200 cursor-pointer"
+            >
+              <input
+                type="checkbox"
+                checked={supported.includes(p.loaixe)}
+                onChange={(e) =>
+                  setSupported((prev) =>
+                    e.target.checked ? [...prev, p.loaixe] : prev.filter((x) => x !== p.loaixe)
+                  )
+                }
+              />
+              <span className="text-sm text-gray-700">
+                {p.loaixe} <span className="text-[10px] text-gray-500">({p.kieuxe})</span>
+              </span>
             </label>
           ))}
         </div>
-        <p className="text-xs text-gray-500 mt-2">Chọn xe nào thì ràng buộc trong bảng phuongtienhotro sẽ được thêm/xóa tương ứng.</p>
+        <p className="text-xs text-gray-500 mt-2">Không check gì thì không hiện gì.</p>
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 gap-3 flex-wrap">
           <h4 className="font-semibold text-gray-800">Vị trí đỗ</h4>
-         <SpotAdder
-  zoneId={zone.makhuvuc}
-  currentCount={(zone.spots ?? []).length}
-  onAdded={onRefresh}
-  pricingOptions={pricingOptions}
-/>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              className="px-3 py-2 rounded-xl border border-gray-300 bg-white text-sm"
+              onChange={(e) => applyPricingToAll(e.target.value || null)}
+              defaultValue=""
+            >
+              <option value="">Chọn xe để áp dụng cho tất cả</option>
+              {pricingOptions.map((p) => (
+                <option key={p.mabanggia} value={p.mabanggia}>
+                  {p.loaixe} · {p.loaigia} · {p.kieuxe}
+                </option>
+              ))}
+            </select>
+
+            <button
+              onClick={() => addSpot(null)}
+              className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 font-semibold text-sm"
+            >
+              + Thêm vị trí
+            </button>
+          </div>
         </div>
-       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-  {(zone.spots ?? []).map((spot: any) => (
-    <SpotCard
-      key={spot.mavitri}
-      spot={spot}
-      pricingOptions={pricingOptions}
-      onRefresh={onRefresh}
-    />
-  ))}
-</div>
-        <p className="text-xs text-gray-500 mt-2">0 = trống, 1 = có người, 2 = đặt trước.</p>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          {draftSpots.map((spot) => (
+            <div key={spot.id} className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <button
+                  onClick={() => {
+                    const next = window.prompt('Đổi tên vị trí', spot.tenvitri)?.trim();
+                    if (!next || next === spot.tenvitri) return;
+                    updateSpot(spot.id, { tenvitri: next });
+                  }}
+                  className="font-semibold text-gray-800 hover:underline text-left"
+                >
+                  {spot.tenvitri}
+                </button>
+
+                <button
+                  onClick={() => removeSpot(spot.id)}
+                  className="text-red-500 text-sm"
+                >
+                  ×
+                </button>
+              </div>
+
+              <div className="text-xs text-gray-500">
+                Trạng thái: {spot.trangthai === 0 ? 'Trống' : spot.trangthai === 1 ? 'Có người' : 'Đặt trước'}
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Xe được phép</label>
+                <select
+                  value={spot.mabanggia ?? ''}
+                  onChange={(e) => updateSpot(spot.id, { mabanggia: e.target.value || null })}
+                  className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-sm"
+                >
+                  <option value="">Chưa gán</option>
+                  {pricingOptions.map((p) => (
+                    <option key={p.mabanggia} value={p.mabanggia}>
+                      {p.loaixe} · {p.loaigia} · {p.kieuxe}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="text-xs text-gray-500 mt-2">Chỉnh ở đây chỉ là nháp. Chỉ lưu khi bấm “Lưu sân đỗ”.</p>
       </div>
 
       <div className="flex justify-end gap-2">
-        <button onClick={save} disabled={saving || uploading} className="px-5 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-700 hover:to-indigo-700 transition disabled:opacity-60">
+        <button
+          onClick={save}
+          disabled={saving || uploading}
+          className="px-5 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-700 hover:to-indigo-700 transition disabled:opacity-60"
+        >
           Lưu sân đỗ
         </button>
       </div>
@@ -919,76 +1101,11 @@ function ZoneEditor({ zone, onSave, onDelete, saving, onRefresh, lotId }: { zone
   );
 }
 
-function SpotAdder({
-  zoneId,
-  currentCount,
-  onAdded,
-  pricingOptions,
-}: {
-  zoneId: string;
-  currentCount: number;
-  onAdded: () => void;
-  pricingOptions: any[];
-}) {
-  const [selectedPricingId, setSelectedPricingId] = useState<string>('');
-
-  useEffect(() => {
-    if (!selectedPricingId && pricingOptions.length > 0) {
-      setSelectedPricingId(pricingOptions[0].mabanggia);
-    }
-  }, [pricingOptions, selectedPricingId]);
-
-  const add = async () => {
-    const base = window.prompt('Nhập tiền tố vị trí (ví dụ A):', 'A')?.trim().toUpperCase() ?? '';
-    if (!base) return;
-
-    const next = `${base}${String(currentCount + 1).padStart(4, '0')}`;
-
-    try {
-      const { error } = await supabase.from('vitrido').insert({
-        makhuvuc: zoneId,
-        tenvitri: next,
-        trangthai: 0,
-        mabanggia: selectedPricingId || null,
-      });
-
-      if (error) throw error;
-      toast.success('Đã thêm vị trí');
-      onAdded();
-    } catch (error: any) {
-      toast.error(error?.message ?? 'Thêm vị trí thất bại');
-    }
-  };
-
-  return (
-    <div className="flex items-center gap-2">
-      <select
-        value={selectedPricingId}
-        onChange={(e) => setSelectedPricingId(e.target.value)}
-        className="px-3 py-2 rounded-xl border border-gray-300 bg-white text-sm"
-      >
-        <option value="">Chưa gán xe</option>
-        {pricingOptions.map((p) => (
-          <option key={p.mabanggia} value={p.mabanggia}>
-            {p.loaixe} · {p.loaigia}
-          </option>
-        ))}
-      </select>
-
-      <button
-        onClick={add}
-        className="px-4 py-2 rounded-xl bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100 font-semibold text-sm"
-      >
-        + Thêm vị trí
-      </button>
-    </div>
-  );
-}
 
 function SpotCard({
   spot,
   pricingOptions,
-  onRefresh,
+  
 }: {
   spot: any;
   pricingOptions: any[];
@@ -1012,7 +1129,7 @@ function SpotCard({
     if (error) return toast.error(error.message);
 
     toast.success('Đã đổi tên vị trí');
-    onRefresh();
+    
   };
 
   const updateVehicle = async (mabanggia: string) => {
@@ -1025,7 +1142,7 @@ function SpotCard({
 
     setSelectedPricingId(mabanggia);
     toast.success('Đã cập nhật xe cho vị trí');
-    onRefresh();
+    
   };
 
   const remove = async () => {
@@ -1035,7 +1152,7 @@ function SpotCard({
     if (error) return toast.error(error.message);
 
     toast.success('Đã xóa vị trí');
-    onRefresh();
+   
   };
 
   return (
@@ -1076,13 +1193,43 @@ function SpotCard({
   );
 }
 
+type PricingDraftRow = PricingRow & {
+  coinPrice?: number;
+  isNew?: boolean;
+};
+
 function PricingManager({ lot, onRefresh }: { lot: any; onRefresh: () => void }) {
-  const [rows, setRows] = useState<any[]>(lot.pricing ?? []);
+  const [rows, setRows] = useState<PricingDraftRow[]>(lot.pricing ?? []);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => setRows(lot.pricing ?? []), [lot.mabaido]);
+  useEffect(() => {
+    setRows(lot.pricing ?? []);
+  }, [lot.mabaido]);
 
-  const addRow = () => setRows((prev) => [...prev, { mabanggia: `tmp_${Date.now()}`, loaixe: '', loaigia: 'fixed', thanhtien: 0, thanhtoanxuao: false, coinPrice: 0, isNew: true }]);
+  const addRow = (group: 'car' | 'motorcycle') => {
+    setRows((prev) => [
+      ...prev,
+      {
+        mabanggia: `tmp_${Date.now()}_${Math.random().toString(16).slice(2)}`,
+        loaixe: '',
+        loaigia: 'fixed',
+        thanhtien: 0,
+        thanhtoanxuao: false,
+        mabaido: lot.mabaido,
+        kieuxe: group,
+        coinPrice: 0,
+        isNew: true,
+      },
+    ]);
+  };
+
+  const updateRow = (idx: number, next: PricingDraftRow) => {
+    setRows((prev) => prev.map((x, i) => (i === idx ? next : x)));
+  };
+
+  const removeRowLocal = (idx: number) => {
+    setRows((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const save = async () => {
     setSaving(true);
@@ -1094,23 +1241,47 @@ function PricingManager({ lot, onRefresh }: { lot: any; onRefresh: () => void })
           thanhtien: Number(row.thanhtien ?? 0),
           thanhtoanxuao: Boolean(row.thanhtoanxuao),
           mabaido: lot.mabaido,
-        } as any;
+          kieuxe: row.kieuxe, // car | motorcycle
+        };
 
         if (row.isNew) {
-          const { data, error } = await supabase.from('banggia').insert(payload).select().single();
+          const { data, error } = await supabase
+            .from('banggia')
+            .insert(payload)
+            .select()
+            .single();
+
           if (error) throw error;
-          if (row.thanhtoanxuao) await supabase.from('banggiaxuao').insert({ mabanggia: data.mabanggia, thanhxu: Number(row.coinPrice ?? 0) });
-        } else {
-          const { error } = await supabase.from('banggia').update(payload).eq('mabanggia', row.mabanggia);
-          if (error) throw error;
+
           if (row.thanhtoanxuao) {
-            const { error: coinUpsertError } = await supabase.from('banggiaxuao').upsert({ mabanggia: row.mabanggia, thanhxu: Number(row.coinPrice ?? 0) });
+            const { error: coinErr } = await supabase.from('banggiaxuao').insert({
+              mabanggia: data.mabanggia,
+              thanhxu: Number(row.coinPrice ?? 0),
+            });
+
+            if (coinErr) throw coinErr;
+          }
+        } else {
+          const { error } = await supabase
+            .from('banggia')
+            .update(payload)
+            .eq('mabanggia', row.mabanggia);
+
+          if (error) throw error;
+
+          if (row.thanhtoanxuao) {
+            const { error: coinUpsertError } = await supabase.from('banggiaxuao').upsert({
+              mabanggia: row.mabanggia,
+              thanhxu: Number(row.coinPrice ?? 0),
+            });
+
             if (coinUpsertError) throw coinUpsertError;
           } else {
             await supabase.from('banggiaxuao').delete().eq('mabanggia', row.mabanggia);
           }
         }
       }
+
       toast.success('Đã lưu bảng giá');
       onRefresh();
     } catch (error: any) {
@@ -1120,57 +1291,155 @@ function PricingManager({ lot, onRefresh }: { lot: any; onRefresh: () => void })
     }
   };
 
-  const remove = async (id: string) => {
+  const remove = async (row: PricingDraftRow, idx: number) => {
     if (!window.confirm('Xóa dòng bảng giá này?')) return;
-    await supabase.from('banggiaxuao').delete().eq('mabanggia', id);
-    await supabase.from('banggia').delete().eq('mabanggia', id);
+
+    if (row.isNew) {
+      removeRowLocal(idx);
+      return;
+    }
+
+    await supabase.from('banggiaxuao').delete().eq('mabanggia', row.mabanggia);
+    await supabase.from('banggia').delete().eq('mabanggia', row.mabanggia);
+
     toast.success('Đã xóa dòng giá');
     onRefresh();
   };
 
-  return (
-    <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6 space-y-5">
-      <EditorSectionTitle title="Bảng giá" desc="Nếu bật xu ảo thì loại giá bị khóa về fixed. Nếu không bật xu ảo thì chọn fixed / hourly / daily." />
+  const renderGroup = (group: 'motorcycle' | 'car', title: string, titleColor: string, addText: string) => {
+    const groupRows = rows
+      .map((row, idx) => ({ row, idx }))
+      .filter(({ row }) => row.kieuxe === group);
+
+    return (
       <div className="space-y-4">
-        {rows.map((row, idx) => (
-          <PricingRowCard key={row.mabanggia} row={row} onChange={(next) => setRows((prev) => prev.map((x, i) => (i === idx ? next : x)))} onRemove={() => remove(row.mabanggia)} />
+        <div className="flex items-center justify-between">
+          <h3 className={`text-lg font-bold ${titleColor}`}>{title}</h3>
+          <button
+            onClick={() => addRow(group)}
+            className="border-2 border-dashed border-gray-300 px-4 py-2 rounded-lg text-gray-600 hover:border-purple-500 hover:text-purple-600 transition flex items-center justify-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            {addText}
+          </button>
+        </div>
+
+        {groupRows.map(({ row, idx }, displayIndex) => (
+          <PricingRowCard
+            key={row.mabanggia}
+            row={row}
+            label={`Cấu hình loại xe #${displayIndex + 1}`}
+            onChange={(next) => updateRow(idx, next)}
+            onRemove={() => remove(row, idx)}
+          />
         ))}
       </div>
-      <div className="flex items-center justify-between gap-3">
-        <button onClick={addRow} className="px-4 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold">+ Thêm loại xe</button>
-        <button onClick={save} disabled={saving} className="px-5 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold disabled:opacity-60">Lưu bảng giá</button>
+    );
+  };
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6 space-y-5">
+      <EditorSectionTitle
+        title="Bảng giá"
+        desc="Tách riêng 2 miền: xe máy và xe ô tô. `kieuxe` chỉ lưu DB, không cần nhập tay trên UI."
+      />
+
+      <div className="space-y-8">
+        {renderGroup('motorcycle', '🏍 Xe máy', 'text-purple-700', 'Thêm xe máy')}
+        {renderGroup('car', '🚗 Xe ô tô', 'text-indigo-700', 'Thêm xe ô tô')}
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="px-5 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold disabled:opacity-60"
+        >
+          Lưu bảng giá
+        </button>
       </div>
     </div>
   );
 }
 
-function PricingRowCard({ row, onChange, onRemove }: { row: any; onChange: (next: any) => void; onRemove: () => void }) {
+function PricingRowCard({
+  row,
+  label,
+  onChange,
+  onRemove,
+}: {
+  row: any;
+  label: string;
+  onChange: (next: any) => void;
+  onRemove: () => void;
+}) {
   const isCoin = Boolean(row.thanhtoanxuao);
+
   return (
     <div className={`rounded-3xl border p-4 ${isCoin ? 'border-yellow-300 bg-yellow-50/40' : 'border-gray-200 bg-white'}`}>
+      <div className="flex items-center justify-between mb-4">
+        <span className="font-semibold text-gray-700">{label}</span>
+        <label className="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <input
+            type="checkbox"
+            checked={isCoin}
+            onChange={(e) =>
+              onChange({
+                ...row,
+                thanhtoanxuao: e.target.checked,
+                loaigia: e.target.checked ? 'fixed' : row.loaigia,
+              })
+            }
+          />
+          Thanh toán xu ảo
+        </label>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
         <Field label="Loại xe" value={row.loaixe ?? ''} onChange={(v) => onChange({ ...row, loaixe: v })} />
         <div>
           <label className="block text-sm mb-2 text-gray-700 font-medium">Loại giá</label>
-          <select value={row.loaigia ?? 'fixed'} disabled={isCoin} onChange={(e) => onChange({ ...row, loaigia: e.target.value })} className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white disabled:bg-gray-100">
+          <select
+            value={row.loaigia ?? 'fixed'}
+            disabled={isCoin}
+            onChange={(e) => onChange({ ...row, loaigia: e.target.value })}
+            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white disabled:bg-gray-100"
+          >
             <option value="fixed">Cố định</option>
             <option value="hourly">Theo giờ</option>
             <option value="daily">Theo ngày</option>
           </select>
         </div>
-        <Field label="Giá VNĐ" value={String(row.thanhtien ?? 0)} onChange={(v) => onChange({ ...row, thanhtien: v })} type="number" />
-        <Field label="Giá xu ảo" value={String(row.coinPrice ?? 0)} onChange={(v) => onChange({ ...row, coinPrice: v })} type="number" disabled={!isCoin} />
+
+        <Field
+          label="Giá VNĐ"
+          value={String(row.thanhtien ?? 0)}
+          onChange={(v) => onChange({ ...row, thanhtien: v })}
+          type="number"
+        />
+
+        <Field
+          label="Giá xu ảo"
+          value={String(row.coinPrice ?? 0)}
+          onChange={(v) => onChange({ ...row, coinPrice: v })}
+          type="number"
+          disabled={!isCoin}
+        />
+
         <div className="space-y-2">
-          <label className="inline-flex items-center gap-2 text-sm font-medium text-gray-700">
-            <input type="checkbox" checked={isCoin} onChange={(e) => onChange({ ...row, thanhtoanxuao: e.target.checked, loaigia: e.target.checked ? 'fixed' : row.loaigia })} />
-            Thanh toán xu ảo
-          </label>
-          <button onClick={onRemove} className="w-full px-4 py-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 font-semibold">Xóa</button>
+          <button
+            onClick={onRemove}
+            className="w-full px-4 py-2 rounded-xl border border-red-200 text-red-700 hover:bg-red-50 font-semibold"
+          >
+            Xóa
+          </button>
         </div>
       </div>
     </div>
   );
 }
+
+
 
 function AmenityManager({ lot, onRefresh }: { lot: any; onRefresh: () => void }) {
   const [items, setItems] = useState<AmenityRow[]>(lot.amenities ?? []);

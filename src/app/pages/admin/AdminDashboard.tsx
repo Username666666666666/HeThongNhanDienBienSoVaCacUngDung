@@ -1,11 +1,11 @@
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   Building2, Users, BarChart3, MapPin, Settings, AlertCircle,
   DollarSign, Car, Clock, TrendingUp, Package, Shield, MessageSquare,
   Video, Bell, User, Plus, Camera
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
-import { supabase } from '../../utils/supabase';
+import { supabase } from '../../utils/supabase.ts';
 
 
 type StaffInviteResponseStatus = 'accepted' | 'rejected';
@@ -564,7 +564,7 @@ const handleOpenNotification = async (n: ParsedAdminNotification) => {
       <div className="p-5 bg-gradient-to-r from-purple-600 to-indigo-600 text-white">
         <h2 className="text-xl font-bold">Chi tiết thông báo</h2>
         <p className="text-sm text-white/80 mt-1">
-          Phản hồi từ chủ xe
+          Phản hồi từ Người dùng
         </p>
       </div>
 

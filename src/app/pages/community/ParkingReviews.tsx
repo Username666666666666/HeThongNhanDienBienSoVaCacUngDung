@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Star,
@@ -12,8 +12,8 @@ import {
   X,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../../utils/supabase';
-import { useAuth } from '../../context/AuthContext';
+import { supabase } from '../../utils/supabase.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
 
 type NguoiDungRow = {
   manguoidung: string;

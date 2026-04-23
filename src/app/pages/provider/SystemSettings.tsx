@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Settings, Bell, Send, Trash2, Plus, Edit 
 } from 'lucide-react';
@@ -92,7 +92,7 @@ export const SystemSettings = () => {
       case 'support':
         return 'Hỗ trợ';
       case 'owner':
-        return 'Chủ xe';
+        return 'Người dùng';
       default:
         return role;
     }
@@ -446,7 +446,7 @@ export const SystemSettings = () => {
                   <option value="admin">🛡️ Admin</option>
                   <option value="supervisor">👁️ Giám sát</option>
                   <option value="support">💬 Hỗ trợ</option>
-                  <option value="owner">🚗 Chủ xe</option>
+                  <option value="owner">🚗 Người dùng</option>
                 </select>
               </div>
             </div>

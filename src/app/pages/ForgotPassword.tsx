@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowLeft, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../utils/supabase';
+import { supabase } from '../utils/supabase.ts';
 
 export const ForgotPassword = () => {
   const navigate = useNavigate();
@@ -16,68 +16,105 @@ export const ForgotPassword = () => {
 
   // BƯỚC 1: GỬI MÃ PIN 8 SỐ VÀO LUỒNG RESET PASSWORD
   const handleSendEmail = async () => {
-    if (!email || !email.includes('@')) {
-      toast.error('❌ Vui lòng nhập email hợp lệ!');
-      return;
-    }
-    setLoading(true);
-    // Dùng resetPasswordForEmail để kích hoạt đúng template "Reset Password" trên Dashboard
-    const { error } = await supabase.auth.resetPasswordForEmail(email);
+  if (!email || !email.includes('@')) {
+    toast.error('❌ Vui lòng nhập email hợp lệ!');
+    return;
+  }
+  setLoading(true);
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success(`✅ Đã gửi mã PIN 8 chữ số đến ${email}!`);
-      setStep('pin');
-    }
+  try {
+    // Gọi Edge Function để tạo và lưu OTP vào bảng yeu_cau_dat_lai_pin
+    const { data, error } = await supabase.functions.invoke('send-otp', {
+  body: {
+    email,
+    purpose: "reset_password",
+    userId: null
+  },
+});
+
+if (error) throw error;
+
+if (!data?.success) {
+  toast.error(`❌ ${data?.message ?? 'Không gửi được OTP'}`);
+  return;
+}
+
+toast.success(`✅ ${data.message}`);
+setStep('pin');
+  } catch (error: any) {
+    toast.error('❌ Lỗi: ' + error.message);
+  } finally {
     setLoading(false);
-  };
+  }
+};
 
   // BƯỚC 2: XÁC THỰC MÃ PIN 8 SỐ
-  const handleVerifyPin = async () => {
-    if (pin.length !== 8) {
-      toast.error('❌ Mã PIN phải nhập đủ 8 chữ số!');
-      return;
-    }
-    setLoading(true);
-    const { error } = await supabase.auth.verifyOtp({
-      email,
-      token: pin,
-      type: 'recovery', // Bắt buộc dùng type recovery cho luồng reset password
-    });
+ const handleVerifyPin = async () => {
+  if (pin.length !== 8) {
+    toast.error('❌ Mã PIN phải nhập đủ 8 chữ số!');
+    return;
+  }
+  setLoading(true);
 
-    if (error) {
+  try {
+    // Truy vấn bảng nhật ký để kiểm tra mã PIN
+    const { data, error } = await supabase
+      .from('yeu_cau_dat_lai_pin')
+      .select('*')
+      .eq('email', email)
+      .eq('ma_otp_da_bam', pin)
+      .eq('da_su_dung', false)
+      .gt('het_han_luc', new Date().toISOString())
+      .maybeSingle();
+
+    if (error || !data) {
       toast.error('❌ Mã PIN không chính xác hoặc đã hết hạn!');
     } else {
+      // Đánh dấu đã sử dụng mã này
+      await supabase
+        .from('yeu_cau_dat_lai_pin')
+        .update({ da_su_dung: true })
+        .eq('id', data.id);
+
       toast.success('✅ Xác thực thành công!');
       setStep('reset');
     }
+  } catch (err) {
+    toast.error('❌ Có lỗi xảy ra khi xác thực!');
+  } finally {
     setLoading(false);
-  };
-
+  }
+};
   // BƯỚC 3: CẬP NHẬT MẬT KHẨU MỚI (SAU KHI ĐÃ XÁC THỰC PIN)
   const handleResetPassword = async () => {
-    if (newPassword.length < 6) {
-      toast.error('❌ Mật khẩu mới phải từ 6 ký tự trở lên!');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      toast.error('❌ Mật khẩu xác nhận không khớp!');
-      return;
-    }
+  if (newPassword.length < 6) {
+    toast.error('❌ Mật khẩu mới quá ngắn!');
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    toast.error('❌ Mật khẩu không khớp!');
+    return;
+  }
 
-    setLoading(true);
-    // Khi verifyOtp thành công, Supabase tạo session tạm, ta chỉ cần update mật khẩu
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
+  setLoading(true);
+  // Lưu ý: Để update mật khẩu mà không có session, bạn cần một API trung gian 
+  // hoặc dùng phương thức Admin của Supabase nếu app có quyền.
+  // Ở đây giả định bạn dùng Edge Function khác để cập nhật mật khẩu an toàn:
+const { data, error } = await supabase.functions.invoke('update-user-password', {
+  body: { email, newPassword }
+});
 
-    if (error) {
-      toast.error(error.message);
-    } else {
-      toast.success('✅ Cập nhật mật khẩu thành công!');
-      setTimeout(() => navigate('/login'), 1500);
-    }
-    setLoading(false);
-  };
+if (error) throw error;
+
+if (!data?.success) {
+  toast.error(`❌ ${data?.message ?? 'Đổi mật khẩu thất bại'}`);
+  return;
+}
+
+toast.success(`✅ ${data.message}`);
+setTimeout(() => navigate('/login'), 1500);
+  setLoading(false);
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center p-4">

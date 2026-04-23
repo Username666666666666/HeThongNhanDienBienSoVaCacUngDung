@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { MapPin, Eye, Clock, Search, Car, Star, Coins } from 'lucide-react';
-import { supabase } from '../../utils/supabase';
+import { supabase } from '../../utils/supabase.ts';
 
 interface ParkingLot {
   id: string;

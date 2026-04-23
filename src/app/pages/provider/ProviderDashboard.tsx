@@ -1,7 +1,8 @@
-import { useNavigate } from 'react-router';
-import { 
-  Server, Users, Building2, Coins, Camera, Shield, 
-  TrendingUp, User, Bell, BarChart3, Settings, Package, Wrench
+import { useNavigate } from 'react-router-dom';
+import {
+  Server, Users, Building2, Coins, Camera, Shield,
+  TrendingUp, User, Bell, BarChart3, Settings, Package, Wrench,
+  ShieldCheck
 } from 'lucide-react';
 
 export const ProviderDashboard = () => {
@@ -22,7 +23,6 @@ export const ProviderDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-50">
-      {/* Header */}
       <div className="bg-gradient-to-r from-slate-800 via-gray-800 to-zinc-800 text-white shadow-xl">
         <div className="max-w-7xl mx-auto px-4 py-6">
           <div className="flex items-center justify-between">
@@ -51,7 +51,6 @@ export const ProviderDashboard = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white p-6 rounded-2xl shadow-lg border-2 border-blue-200">
             <div className="flex items-center justify-between mb-2">
@@ -98,7 +97,6 @@ export const ProviderDashboard = () => {
           </div>
         </div>
 
-        {/* Main Actions */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <button
             onClick={() => navigate('/provider/accounts')}
@@ -146,8 +144,7 @@ export const ProviderDashboard = () => {
           </button>
         </div>
 
-        {/* Secondary Actions */}
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-8">
           <button
             onClick={() => navigate('/provider/package-management')}
             className="bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition flex items-center gap-4 border-2 border-purple-300"
@@ -225,9 +222,21 @@ export const ProviderDashboard = () => {
               <div className="text-sm text-gray-500">Liên hệ</div>
             </div>
           </button>
+
+         <button
+  onClick={() => navigate('/provider/vehicle-verify')}
+  className="sm:col-span-2 xl:col-span-3 bg-white p-6 rounded-xl shadow-md hover:shadow-lg transition flex items-center gap-4 border-2 border-emerald-300"
+>
+            <div className="bg-emerald-100 p-3 rounded-lg">
+              <ShieldCheck className="w-6 h-6 text-emerald-600" />
+            </div>
+            <div className="text-left">
+              <div className="text-lg font-bold text-gray-900">Xác thực phương tiện</div>
+              <div className="text-sm text-gray-500">Duyệt hồ sơ người dùng</div>
+            </div>
+          </button>
         </div>
 
-        {/* Recent Registrations */}
         <div className="bg-white rounded-2xl shadow-lg p-6">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Đăng ký gần đây</h2>
           <div className="space-y-3">
@@ -246,13 +255,15 @@ export const ProviderDashboard = () => {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className={`text-sm font-semibold px-3 py-1 rounded-full inline-block ${
-                    reg.package === 'Cao cấp' 
-                      ? 'bg-purple-100 text-purple-700'
-                      : reg.package === 'Tiêu chuẩn'
-                      ? 'bg-blue-100 text-blue-700'
-                      : 'bg-gray-100 text-gray-700'
-                  }`}>
+                  <div
+                    className={`text-sm font-semibold px-3 py-1 rounded-full inline-block ${
+                      reg.package === 'Cao cấp'
+                        ? 'bg-purple-100 text-purple-700'
+                        : reg.package === 'Tiêu chuẩn'
+                        ? 'bg-blue-100 text-blue-700'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
                     {reg.package}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">{reg.date}</div>

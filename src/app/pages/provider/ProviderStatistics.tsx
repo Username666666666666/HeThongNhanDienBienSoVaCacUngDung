@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, BarChart3, TrendingUp, DollarSign, Users, 
   Building2, Calendar, Download, FileText

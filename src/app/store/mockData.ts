@@ -20,7 +20,7 @@ export const mockUsers: User[] = [
   },
   {
     id: '3',
-    name: 'Chủ xe Lê',
+    name: 'Người dùng Lê',
     email: 'owner@parking.com',
     role: 'owner',
     virtualCoins: 1500,
@@ -64,7 +64,7 @@ export const mockParkingLots: ParkingLot[] = [
       {
         id: 'r1',
         userId: '3',
-        userName: 'Chủ xe Lê',
+        userName: 'Người dùng Lê',
         rating: 5,
         comment: 'Bãi đỗ rất rộng rãi, an toàn, nhân viên thân thiện!',
         date: new Date('2026-03-28'),
@@ -269,7 +269,7 @@ export const mockCommunityPosts: CommunityPost[] = [
       {
         id: 'c1',
         userId: '3',
-        userName: 'Chủ xe Lê',
+        userName: 'Người dùng Lê',
         content: 'Tin tuyệt vời! Tôi sẽ sử dụng dịch vụ.',
         createdAt: new Date('2026-03-29T11:00:00'),
       },
@@ -278,7 +278,7 @@ export const mockCommunityPosts: CommunityPost[] = [
   {
     id: 'p2',
     authorId: '3',
-    authorName: 'Chủ xe Lê',
+    authorName: 'Người dùng Lê',
     authorRole: 'owner',
     type: 'general',
     title: 'Đánh giá bãi đỗ xe A',

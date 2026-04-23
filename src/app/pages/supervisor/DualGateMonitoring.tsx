@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Camera, Check, X, DollarSign, MapPin, Upload,
   Clock, AlertCircle, Video, Coins, BadgeCheck, ArrowLeftRight,
@@ -193,7 +193,7 @@ export const DualGateMonitoring = () => {
       return;
     }
     if (entryGate.scannedData.possibleOwners && !entryGate.selectedOwner) {
-      toast.error('❌ [Cổng VÀO] Vui lòng chọn chủ xe đúng');
+      toast.error('❌ [Cổng VÀO] Vui lòng chọn Người dùng đúng');
       return;
     }
 
@@ -323,7 +323,7 @@ export const DualGateMonitoring = () => {
                 ⚠️ Trùng biển số!
               </h4>
               <p className="text-xs text-gray-600">
-                Chọn chủ xe đúng ({entryGate.scannedData.possibleOwners.length} người)
+                Chọn Người dùng đúng ({entryGate.scannedData.possibleOwners.length} người)
               </p>
             </div>
           </div>
@@ -789,7 +789,7 @@ export const DualGateMonitoring = () => {
                   • Mỗi cổng độc lập, xử lý riêng biệt để tránh nhầm lẫn IN/OUT
                 </li>
                 <li>
-                  • Hệ thống tự động phát hiện trùng biển số và yêu cầu chọn chủ xe đúng
+                  • Hệ thống tự động phát hiện trùng biển số và yêu cầu chọn Người dùng đúng
                 </li>
               </ul>
             </div>

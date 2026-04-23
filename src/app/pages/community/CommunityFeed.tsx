@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft, Plus, MessageSquare, ThumbsUp, Hash, AlertTriangle,
   Search, Filter, Bell, Gift, HelpCircle, Star, Users, Send, LogOut, Map
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { CommunityPost, ContentTag } from '../../types/community';
-import { useAuth } from '../../context/AuthContext';
-import { getHomeRoute } from '../../utils/navigation';
+import type { CommunityPost, ContentTag } from '../../types/community.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
+import { getHomeRoute } from '../../utils/navigation.ts';
 
 export const CommunityFeed = () => {
   const navigate = useNavigate();

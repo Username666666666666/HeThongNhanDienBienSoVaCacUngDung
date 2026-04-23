@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Search,
@@ -19,7 +19,7 @@ import {
   ChevronDown,
   ChevronUp,
 } from 'lucide-react';
-import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/figma/ImageWithFallback.tsx';
 import { toast } from 'sonner';
 
 interface LogEntry {
@@ -263,7 +263,7 @@ export const VehicleEntryExitLog = () => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm theo biển số hoặc tên chủ xe..."
+                placeholder="Tìm theo biển số hoặc tên Người dùng..."
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               />
             </div>

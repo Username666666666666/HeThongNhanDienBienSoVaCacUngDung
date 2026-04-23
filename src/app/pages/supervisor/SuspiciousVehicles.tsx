@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   AlertTriangle,
@@ -17,7 +17,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/figma/ImageWithFallback.tsx';
 
 interface SuspiciousVehicle {
   id: string;
@@ -52,7 +52,7 @@ export const SuspiciousVehicles = () => {
       driverPhoto: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?w=400',
       status: 'suspicious',
       lastChecked: new Date('2026-04-02T10:00:00'),
-      notes: 'Đã liên hệ chủ xe nhưng không nghe máy',
+      notes: 'Đã liên hệ Người dùng nhưng không nghe máy',
     },
     {
       id: '2',
@@ -254,7 +254,7 @@ export const SuspiciousVehicles = () => {
                   <div className="space-y-3">
                     <h4 className="font-bold text-gray-900 flex items-center gap-2">
                       <User className="w-5 h-5 text-blue-600" />
-                      Thông tin chủ xe
+                      Thông tin Người dùng
                     </h4>
                     <div className="space-y-2 text-sm">
                       <div className="flex items-center gap-2">
@@ -284,7 +284,7 @@ export const SuspiciousVehicles = () => {
                       className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-2 rounded-lg hover:from-green-700 hover:to-emerald-700 transition flex items-center justify-center gap-2 font-semibold"
                     >
                       <Phone className="w-4 h-4" />
-                      Liên hệ chủ xe
+                      Liên hệ Người dùng
                     </button>
                   </div>
 
@@ -415,13 +415,13 @@ export const SuspiciousVehicles = () => {
                 </li>
                 <li>
                   • <strong className="text-red-600">Nghi ngờ cao (trên 5 ngày):</strong>{' '}
-                  Xe đỗ quá 5 ngày, cần liên hệ chủ xe hoặc báo cáo
+                  Xe đỗ quá 5 ngày, cần liên hệ Người dùng hoặc báo cáo
                 </li>
                 <li>
                   • Hệ thống tự động cập nhật danh sách mỗi ngày lúc 6:00 sáng
                 </li>
                 <li>
-                  • Có thể thêm ghi chú, liên hệ chủ xe, hoặc đánh dấu vào vùng nghi ngờ
+                  • Có thể thêm ghi chú, liên hệ Người dùng, hoặc đánh dấu vào vùng nghi ngờ
                 </li>
               </ul>
             </div>

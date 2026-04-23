@@ -19,7 +19,7 @@ yarn-debug.log*
 Thumbs.db
 
 # IDE
-.vscode/
+
 .idea/
 
 # misc

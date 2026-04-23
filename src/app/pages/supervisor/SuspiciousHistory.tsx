@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   Flag,
@@ -16,8 +16,9 @@ import {
   Download,
   Eye,
   Camera,
+  
 } from 'lucide-react';
-import { ImageWithFallback } from '../../components/figma/ImageWithFallback';
+import { ImageWithFallback } from '../../components/figma/ImageWithFallback.tsx';
 
 interface HistoryRecord {
   id: string;
@@ -61,7 +62,7 @@ export const SuspiciousHistory = () => {
       resolvedTime: new Date('2026-03-23T14:30:00'),
       daysParked: 8,
       status: 'resolved',
-      resolution: 'Chủ xe đi công tác dài ngày, đã xác nhận qua điện thoại',
+      resolution: 'Người dùng đi công tác dài ngày, đã xác nhận qua điện thoại',
       flaggedBy: 'Giám sát Trần Văn B',
       resolvedBy: 'Giám sát Trần Văn B',
       entryPhoto: 'https://images.unsplash.com/photo-1774576670116-a21417528d54?w=400',
@@ -79,7 +80,7 @@ export const SuspiciousHistory = () => {
       flaggedTime: new Date('2026-03-26T09:15:00'),
       daysParked: 6,
       status: 'flagged',
-      resolution: 'Đang chờ phản hồi từ chủ xe',
+      resolution: 'Đang chờ phản hồi từ Người dùng',
       flaggedBy: 'Giám sát Lê Thị C',
       entryPhoto: 'https://images.unsplash.com/photo-1552519507-da3b142c6e3d?w=400',
       driverPhoto: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400',
@@ -97,12 +98,12 @@ export const SuspiciousHistory = () => {
       resolvedTime: new Date('2026-03-11T16:00:00'),
       daysParked: 11,
       status: 'removed',
-      resolution: 'Xe bị bỏ quên, đã liên hệ chủ xe và di dời xe ra khỏi bãi',
+      resolution: 'Xe bị bỏ quên, đã liên hệ Người dùng và di dời xe ra khỏi bãi',
       flaggedBy: 'Giám sát Trần Văn B',
       resolvedBy: 'Admin Nguyễn Văn D',
       entryPhoto: 'https://images.unsplash.com/photo-1605559424843-9e4c228bf1c2?w=400',
       driverPhoto: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=400',
-      notes: 'Xe hỏng, chủ xe đã thu xếp xe cứu hộ',
+      notes: 'Xe hỏng, Người dùng đã thu xếp xe cứu hộ',
     },
     {
       id: '4',
@@ -116,7 +117,7 @@ export const SuspiciousHistory = () => {
       resolvedTime: new Date('2026-03-26T10:00:00'),
       daysParked: 8,
       status: 'resolved',
-      resolution: 'Chủ xe nhập viện, người thân đã đến lấy xe',
+      resolution: 'Người dùng nhập viện, người thân đã đến lấy xe',
       flaggedBy: 'Giám sát Lê Thị C',
       resolvedBy: 'Giám sát Lê Thị C',
       entryPhoto: 'https://images.unsplash.com/photo-1580273916550-e323be2ae537?w=400',
@@ -284,7 +285,7 @@ export const SuspiciousHistory = () => {
                 type="text"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Tìm theo biển số, tên chủ xe, số điện thoại..."
+                placeholder="Tìm theo biển số, tên Người dùng, số điện thoại..."
                 className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none"
               />
             </div>
@@ -342,7 +343,7 @@ export const SuspiciousHistory = () => {
                   <div className="space-y-2">
                     <h4 className="font-bold text-gray-900 text-sm flex items-center gap-2">
                       <User className="w-4 h-4 text-blue-600" />
-                      Thông tin chủ xe
+                      Thông tin Người dùng
                     </h4>
                     <div className="space-y-1 text-sm">
                       <div className="flex items-center gap-2">
@@ -501,7 +502,7 @@ export const SuspiciousHistory = () => {
               <div>
                 <h3 className="font-bold text-gray-900 mb-3 text-lg flex items-center gap-2">
                   <User className="w-5 h-5 text-blue-600" />
-                  Thông tin chủ xe
+                  Thông tin Người dùng
                 </h3>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div className="flex items-center gap-2">

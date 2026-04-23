@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Clock, Play, Square, User, Calendar, MapPin,
   CheckCircle, AlertTriangle, List
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ShiftRecord } from '../../types/community';
+import type { ShiftRecord } from '../../types/community.ts';
 
 export const ShiftManagement = () => {
   const navigate = useNavigate();

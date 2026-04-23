@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, AlertTriangle, Car, Clock, MapPin, Send, User, MessageSquare, Filter, Upload, Image as ImageIcon, Search, Shield, Eye, AlertOctagon, Camera } from 'lucide-react';
 import { toast } from 'sonner';
-import type { TheftReport, TheftReportUpdate } from '../../types/community';
-import { useAuth } from '../../context/AuthContext';
-import { getHomeRoute } from '../../utils/navigation';
+import type { TheftReport, TheftReportUpdate } from '../../types/community.ts';
+import { useAuth } from '../../context/AuthContext.tsx';
+import { getHomeRoute } from '../../utils/navigation.ts';
 
 export const TheftReportPage = () => {
   const navigate = useNavigate();
@@ -237,7 +237,7 @@ const handleCreateReport = () => {
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Tìm theo biển số hoặc tên chủ xe..."
+              placeholder="Tìm theo biển số hoặc tên Người dùng..."
               className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
             />
           </div>

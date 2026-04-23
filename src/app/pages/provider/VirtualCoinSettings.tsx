@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Coins, Save, Info } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -66,7 +66,7 @@ export const VirtualCoinSettings = () => {
               <ul className="text-sm text-gray-700 space-y-1">
                 <li>• Chỉ nhà cung cấp mới có quyền cấu hình SỐ LƯỢNG xu ảo cho đặt chỗ trước</li>
                 <li>• Cấu hình này áp dụng cho TOÀN BỘ hệ thống</li>
-                <li>• Chủ xe phải nằm trong khoảng giới hạn khi đặt chỗ trước bằng xu</li>
+                <li>• Người dùng phải nằm trong khoảng giới hạn khi đặt chỗ trước bằng xu</li>
                 <li>• Admin các bãi đỗ không thể thay đổi giới hạn này</li>
               </ul>
             </div>
@@ -95,7 +95,7 @@ export const VirtualCoinSettings = () => {
               />
             </div>
             <div className="mt-2 text-sm text-gray-600">
-              Chủ xe phải đặt tối thiểu <strong>{minCoinsPerBooking} xu</strong> cho mỗi lần đặt chỗ
+              Người dùng phải đặt tối thiểu <strong>{minCoinsPerBooking} xu</strong> cho mỗi lần đặt chỗ
             </div>
           </div>
 
@@ -117,7 +117,7 @@ export const VirtualCoinSettings = () => {
               />
             </div>
             <div className="mt-2 text-sm text-gray-600">
-              Chủ xe chỉ được đặt tối đa <strong>{maxCoinsPerBooking} xu</strong> cho mỗi lần đặt chỗ
+              Người dùng chỉ được đặt tối đa <strong>{maxCoinsPerBooking} xu</strong> cho mỗi lần đặt chỗ
             </div>
           </div>
 
@@ -152,9 +152,9 @@ export const VirtualCoinSettings = () => {
                   <span className="font-bold text-green-700">HỢP LỆ</span>
                 </div>
                 <p className="text-gray-700">
-                  • Chủ xe đặt chỗ với <strong>{minCoinsPerBooking} xu</strong> - OK<br />
-                  • Chủ xe đặt chỗ với <strong>{Math.floor((minCoinsPerBooking + maxCoinsPerBooking) / 2)} xu</strong> - OK<br />
-                  • Chủ xe đặt chỗ với <strong>{maxCoinsPerBooking} xu</strong> - OK
+                  • Người dùng đặt chỗ với <strong>{minCoinsPerBooking} xu</strong> - OK<br />
+                  • Người dùng đặt chỗ với <strong>{Math.floor((minCoinsPerBooking + maxCoinsPerBooking) / 2)} xu</strong> - OK<br />
+                  • Người dùng đặt chỗ với <strong>{maxCoinsPerBooking} xu</strong> - OK
                 </p>
               </div>
 
@@ -164,9 +164,9 @@ export const VirtualCoinSettings = () => {
                   <span className="font-bold text-red-700">KHÔNG HỢP LỆ</span>
                 </div>
                 <p className="text-gray-700">
-                  • Chủ xe đặt chỗ với <strong>1 xu</strong> - Quá ít (tối thiểu {minCoinsPerBooking} xu)<br />
-                  • Chủ xe đặt chỗ với <strong>9999 xu</strong> - Quá nhiều (tối đa {maxCoinsPerBooking} xu)<br />
-                  • Chủ xe đặt chỗ với <strong>{minCoinsPerBooking - 1} xu</strong> - Dưới mức tối thiểu
+                  • Người dùng đặt chỗ với <strong>1 xu</strong> - Quá ít (tối thiểu {minCoinsPerBooking} xu)<br />
+                  • Người dùng đặt chỗ với <strong>9999 xu</strong> - Quá nhiều (tối đa {maxCoinsPerBooking} xu)<br />
+                  • Người dùng đặt chỗ với <strong>{minCoinsPerBooking - 1} xu</strong> - Dưới mức tối thiểu
                 </p>
               </div>
             </div>
@@ -179,7 +179,7 @@ export const VirtualCoinSettings = () => {
               <div className="flex items-start gap-2">
                 <span className="text-green-600 font-bold">✓</span>
                 <div>
-                  <strong>Đặt chỗ trước (giá cố định):</strong> Chủ xe có thể chọn thanh toán bằng tiền mặt HOẶC xu ảo
+                  <strong>Đặt chỗ trước (giá cố định):</strong> Người dùng có thể chọn thanh toán bằng tiền mặt HOẶC xu ảo
                 </div>
               </div>
               <div className="flex items-start gap-2">

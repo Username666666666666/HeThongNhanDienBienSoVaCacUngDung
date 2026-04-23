@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, Car } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "../utils/supabase";
+import { supabase } from "../utils/supabase.ts";
 
 export const Register = () => {
   const navigate = useNavigate();
@@ -105,7 +105,7 @@ export const Register = () => {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none transition"
-                placeholder="example@gmail.com"
+                placeholder="example@domain.com"
                 required
               />
             </div>

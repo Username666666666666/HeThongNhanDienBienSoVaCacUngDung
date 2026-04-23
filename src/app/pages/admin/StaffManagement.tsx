@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   UserPlus,
@@ -10,12 +10,28 @@ import {
   Trash2,
   Key,
   Pencil,
+  UserX,
+  RefreshCw,
+  History,
+  BadgeInfo,
+  Clock3,
 } from 'lucide-react';
+import {
+  createAdminPin,
+  getAdminPinHash,
+  sendPinResetOtp,
+  verifyPinOtp,
+  updateAdminPin,
+  changeAdminPinWithOldPin,
+  markPinResetRequestUsed,
+  type PinResetRequest,
+} from '../../service/pinService.ts';
 import { toast } from 'sonner';
-import { supabase } from '../../utils/supabase';
+import { supabase } from '../../utils/supabase.ts';
 
 type StaffRole = 'owner' | 'supervisor' | 'support' | 'admin' | 'provider';
 type SelectableRole = 'supervisor' | 'support';
+type EmploymentStatusFilter = 'all' | 'active' | 'inactive';
 
 interface ParkingLot {
   code: string;
@@ -23,14 +39,38 @@ interface ParkingLot {
   joinCode: string;
 }
 
+interface EmploymentLogRow {
+  id: string;
+  maadmin: string;
+  manguoidung: string;
+  hoten: string | null;
+  email: string | null;
+  manhanvien_cu: string | null;
+  manhanvien_moi: string | null;
+  ngayvaolam_cu: string | null;
+  chucnang_cu: StaffRole | null;
+  chucnang_moi: StaffRole | null;
+  nghiviec_cu: boolean | null;
+  nghiviec_moi: boolean | null;
+  hanhdong: string;
+  ghichu: string | null;
+  created_at: string;
+}
+
 interface StaffRecord {
   manguoidung: string;
   email: string;
   displayName: string;
-  role: StaffRole;
+   role: StaffRole;        
+  displayRole: StaffRole;  
   parkingLot: ParkingLot | null;
   canSwitchLots: boolean;
   maadmin: string;
+  manhanvien: string | null;
+  ngayvaolam: string | null;
+  nghiviec: boolean;
+  sodt: string | null;
+  anhdaidien: string | null;
 }
 
 interface StaffRow {
@@ -38,6 +78,12 @@ interface StaffRow {
   mabaido: string | null;
   maadmin: string | null;
   duocchuyenbai: boolean | null;
+  hoten: string | null;
+  manhanvien: string | null;
+  nghiviec: boolean | null;
+  ngayvaolam: string | null;
+  sodt: string | null;
+  anhdaidien: string | null;
 
   nguoidung?: {
     email: string | null;
@@ -69,6 +115,34 @@ interface InvitePayload {
   canSwitchLots: boolean;
 }
 
+const formatDateTime = (value?: string | null) => {
+  if (!value) return 'N/A';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return 'N/A';
+  return d.toLocaleString('vi-VN');
+};
+
+const normalizeCodeNumber = (code: string | null | undefined) => {
+  if (!code) return 0;
+  const match = code.match(/^NV(\d+)$/i);
+  if (!match) return 0;
+  return Number(match[1]) || 0;
+};
+const generateNextStaffCode = async (adminId: string) => {
+  const { data, error } = await supabase
+    .from('ctnhanvien')
+    .select('manhanvien')
+    .eq('maadmin', adminId);
+
+  if (error) throw error;
+
+  const maxNum = (data ?? []).reduce((max, row: any) => {
+    return Math.max(max, normalizeCodeNumber(row.manhanvien));
+  }, 0);
+
+  return `NV${String(maxNum + 1).padStart(5, '0')}`;
+};
+
 export const StaffManagement = () => {
   const navigate = useNavigate();
 
@@ -77,6 +151,7 @@ export const StaffManagement = () => {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | SelectableRole>('all');
+  const [filterStatus, setFilterStatus] = useState<EmploymentStatusFilter>('all');
 
   const [newEmail, setNewEmail] = useState('');
   const [newName, setNewName] = useState('');
@@ -86,6 +161,7 @@ export const StaffManagement = () => {
 
   const [staffList, setStaffList] = useState<StaffRecord[]>([]);
   const [parkingLots, setParkingLots] = useState<ParkingLot[]>([]);
+  const [employmentLogs, setEmploymentLogs] = useState<EmploymentLogRow[]>([]);
   const [currentAdminId, setCurrentAdminId] = useState<string>('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -95,15 +171,186 @@ export const StaffManagement = () => {
   const [editParkingLot, setEditParkingLot] = useState<string>('');
   const [editCanSwitchLots, setEditCanSwitchLots] = useState(false);
 
+const [showPinManager, setShowPinManager] = useState(false);
+const [adminEmail, setAdminEmail] = useState("");
+const [hasAdminPin, setHasAdminPin] = useState(false);
+
+const [loadingPin, setLoadingPin] = useState(false);
+
+// tạo PIN lần đầu
+const [createPin, setCreatePin] = useState("");
+const [createConfirmPin, setCreateConfirmPin] = useState("");
+
+// đổi PIN hiện tại
+const [oldPin, setOldPin] = useState("");
+const [newPin, setNewPin] = useState("");
+const [confirmPin, setConfirmPin] = useState("");
+
+// quên PIN
+const [pinStep, setPinStep] = useState<"email" | "otp" | "reset">("email");
+const [otp, setOtp] = useState("");
+const [resetPin, setResetPin] = useState("");
+const [resetConfirmPin, setResetConfirmPin] = useState("");
+const [resetRequest, setResetRequest] = useState<PinResetRequest | null>(null);
+
+  const getLatestLogForUser = (userId: string) => {
+    return employmentLogs.find((log) => log.manguoidung === userId) ?? null;
+  };
+
+
+const loadAdminPinState = async (adminId: string, email: string) => {
+  setAdminEmail(email.toLowerCase());
+
+  const pinRow = await getAdminPinHash(adminId);
+  setHasAdminPin(Boolean(pinRow?.mapinadmin));
+};
+
+  
+
+
+
+  const handleCreatePin = async () => {
+  if (createPin.length !== 8) {
+    toast.error("PIN phải 8 số");
+    return;
+  }
+
+  if (createPin !== createConfirmPin) {
+    toast.error("PIN xác nhận không khớp");
+    return;
+  }
+
+  setLoadingPin(true);
+  try {
+    await createAdminPin(currentAdminId, createPin);
+    setHasAdminPin(true);
+    setCreatePin("");
+    setCreateConfirmPin("");
+    toast.success("Đã tạo PIN admin");
+  } catch (err: any) {
+    toast.error(err?.message || "Không tạo được PIN");
+  } finally {
+    setLoadingPin(false);
+  }
+};
+
   const roleLabels: Record<SelectableRole, string> = {
     supervisor: 'Giám sát viên',
     support: 'Nhân viên hỗ trợ',
   };
 
-  const roleColors: Record<SelectableRole, string> = {
-    supervisor: 'bg-green-100 text-green-700',
-    support: 'bg-blue-100 text-blue-700',
-  };
+const handleChangePin = async () => {
+  if (!hasAdminPin) {
+    toast.error("Chưa có PIN, hãy tạo lần đầu trước");
+    return;
+  }
+
+  if (oldPin.length !== 8) {
+    toast.error("PIN cũ phải đủ 8 số");
+    return;
+  }
+
+  if (newPin.length !== 8) {
+    toast.error("PIN mới phải đủ 8 số");
+    return;
+  }
+
+  if (newPin !== confirmPin) {
+    toast.error("PIN không khớp");
+    return;
+  }
+
+  setLoadingPin(true);
+  try {
+    await changeAdminPinWithOldPin(currentAdminId, oldPin, newPin);
+    setOldPin("");
+    setNewPin("");
+    setConfirmPin("");
+    toast.success("Đổi PIN thành công");
+  } catch (err: any) {
+    toast.error(err?.message || "Đổi PIN thất bại");
+  } finally {
+    setLoadingPin(false);
+  }
+};
+
+const handleSendOtp = async () => {
+  if (!adminEmail) {
+    toast.error("Không lấy được email admin");
+    return;
+  }
+
+  setLoadingPin(true);
+  try {
+    await sendPinResetOtp(adminEmail);
+    setPinStep("otp");
+    toast.success("Đã gửi OTP về email admin");
+  } catch (err: any) {
+    toast.error(err?.message || "Không gửi được OTP");
+  } finally {
+    setLoadingPin(false);
+  }
+};
+
+const handleVerifyOtp = async () => {
+  if (otp.length !== 8) {
+    toast.error("OTP phải đủ 8 số");
+    return;
+  }
+
+  setLoadingPin(true);
+  try {
+    const request = await verifyPinOtp(adminEmail, otp);
+
+    if (!request?.manguoidung) {
+      toast.error("OTP sai hoặc đã hết hạn");
+      return;
+    }
+
+    setResetRequest(request);
+    setPinStep("reset");
+    toast.success("Xác thực OTP thành công");
+  } catch (err: any) {
+    toast.error(err?.message || "Xác thực thất bại");
+  } finally {
+    setLoadingPin(false);
+  }
+};
+
+const handleResetPin = async () => {
+  if (!resetRequest?.manguoidung) {
+    toast.error("Thiếu dữ liệu reset");
+    return;
+  }
+
+  if (resetPin.length !== 8) {
+    toast.error("PIN mới phải đủ 8 số");
+    return;
+  }
+
+  if (resetPin !== resetConfirmPin) {
+    toast.error("PIN xác nhận không khớp");
+    return;
+  }
+
+  setLoadingPin(true);
+  try {
+    await updateAdminPin(resetRequest.manguoidung, resetPin);
+    await markPinResetRequestUsed(resetRequest.id);
+
+    toast.success("Đặt lại PIN admin thành công");
+
+    setPinStep("email");
+    setOtp("");
+    setResetPin("");
+    setResetConfirmPin("");
+    setResetRequest(null);
+  } catch (err: any) {
+    toast.error(err?.message || "Không đặt lại PIN được");
+  } finally {
+    setLoadingPin(false);
+  }
+};
 
   const resetForm = () => {
     setNewEmail('');
@@ -124,7 +371,7 @@ export const StaffManagement = () => {
   const getRoleLabel = (role: StaffRole) => {
     if (role === 'supervisor') return 'Giám sát viên';
     if (role === 'support') return 'Nhân viên hỗ trợ';
-    if (role === 'owner') return 'Chủ xe';
+    if (role === 'owner') return 'Người dùng';
     if (role === 'admin') return 'Admin';
     if (role === 'provider') return 'Nhà cung cấp';
     return role;
@@ -133,9 +380,23 @@ export const StaffManagement = () => {
   const getRoleBadgeClass = (role: StaffRole) => {
     if (role === 'supervisor') return 'bg-green-100 text-green-700';
     if (role === 'support') return 'bg-blue-100 text-blue-700';
+    if (role === 'owner') return 'bg-gray-100 text-gray-700';
+    if (role === 'admin') return 'bg-purple-100 text-purple-700';
+    if (role === 'provider') return 'bg-orange-100 text-orange-700';
     return 'bg-gray-100 text-gray-700';
   };
 
+  const getStatusBadgeClass = (isInactive: boolean) =>
+    isInactive ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700';
+
+   const getAccessLabel = (role?: string | null) => {
+    if (role === 'owner') return 'người dùng';
+    if (role === 'support') return 'nhân viên hỗ trợ';
+    if (role === 'supervisor') return 'nhân viên giám sát';
+    if (role === 'admin') return 'admin';
+    if (role === 'provider') return 'nhà cung cấp';
+    return role || 'N/A';
+  };
   const fetchParkingLots = async (adminId: string) => {
     const { data, error } = await supabase
       .from('baido')
@@ -158,73 +419,116 @@ export const StaffManagement = () => {
     setParkingLots(mapped);
   };
 
-const fetchStaff = async (adminId: string) => {
+const fetchEmploymentLogs = async (adminId: string) => {
   const { data, error } = await supabase
-    .from('ctnhanvien')
+    .from('nhatkynghiviec')
     .select(`
-      manguoidung,
-      mabaido,
+      id,
       maadmin,
-      duocchuyenbai,
-      nguoidung (
-        email,
-        tennguoidung,
-        chucnang
-      )
+      manguoidung,
+      hoten,
+      email,
+      manhanvien_cu,
+      manhanvien_moi,
+      ngayvaolam_cu,
+      chucnang_cu,
+      chucnang_moi,
+      nghiviec_cu,
+      nghiviec_moi,
+      hanhdong,
+      ghichu,
+      created_at
     `)
-    .eq('maadmin', adminId);
+    .eq('maadmin', adminId)
+    .order('created_at', { ascending: false });
 
   if (error) {
-    console.error(error);
-    toast.error('Lỗi load nhân viên');
-    return;
+    console.error('FETCH EMPLOYMENT LOGS ERROR:', error);
+    toast.error('Lỗi load nhật ký');
+    return [];
   }
 
-  // 🔥 Lấy toàn bộ bãi đỗ
-  const { data: lots } = await supabase
-    .from('baido')
-    .select('mabaido, tenbaido, mathamgia');
-
-  const lotMap = new Map(
-    (lots || []).map((l) => [l.mabaido, l])
-  );
-
-  const mapped: StaffRecord[] = (data || []).map((item: any) => {
-    const user = Array.isArray(item.nguoidung)
-  ? item.nguoidung[0]
-  : item.nguoidung;
-
-    // 🔥 Lấy bãi đỗ bằng mabaido từ ctnhanvien
-    const lot = lotMap.get(item.mabaido);
-
-    return {
-      manguoidung: item.manguoidung,
-      email: user?.email || 'unknown',
-
-      // ✅ FIX NAME
-      displayName:
-        user?.tennguoidung?.trim() ||
-        user?.email ||
-        'Không tên',
-
-      role: user?.chucnang || 'support',
-
-      // ✅ FIX PARKING LOT
-      parkingLot: lot
-        ? {
-            code: lot.mabaido,
-            name: lot.tenbaido,
-            joinCode: lot.mathamgia,
-          }
-        : null,
-
-      canSwitchLots: item.duocchuyenbai ?? false,
-      maadmin: item.maadmin || '',
-    };
-  });
-
-  setStaffList(mapped);
+  const logs = (data ?? []) as EmploymentLogRow[];
+  setEmploymentLogs(logs);
+  return logs;
 };
+
+  const fetchStaff = async (adminId: string, logs: EmploymentLogRow[] = []) => {
+    const { data, error } = await supabase
+      .from('ctnhanvien')
+      .select(`
+        manguoidung,
+        mabaido,
+        maadmin,
+        duocchuyenbai,
+        hoten,
+        manhanvien,
+        nghiviec,
+        ngayvaolam,
+        sodt,
+        anhdaidien,
+        nguoidung (
+          email,
+          tennguoidung,
+          chucnang
+        )
+      `)
+      .eq('maadmin', adminId);
+
+    if (error) {
+      console.error(error);
+      toast.error('Lỗi load nhân viên');
+      return;
+    }
+
+    const { data: lots } = await supabase
+      .from('baido')
+      .select('mabaido, tenbaido, mathamgia');
+
+    const lotMap = new Map((lots || []).map((l) => [l.mabaido, l]));
+
+     const mapped: StaffRecord[] = (data || []).map((item: any) => {
+      const user = Array.isArray(item.nguoidung) ? item.nguoidung[0] : item.nguoidung;
+      const lot = lotMap.get(item.mabaido);
+
+      const latestLog = logs.find((log) => log.manguoidung === item.manguoidung);
+      const baseRole: StaffRole = user?.chucnang || 'support';
+
+      const displayRole: StaffRole = item.nghiviec
+        ? ((latestLog?.chucnang_cu && latestLog.chucnang_cu !== 'owner'
+            ? latestLog.chucnang_cu
+            : baseRole) || 'support')
+        : baseRole;
+
+      return {
+        manguoidung: item.manguoidung,
+        email: user?.email || 'unknown',
+        displayName:
+          item.hoten?.trim() ||
+          user?.tennguoidung?.trim() ||
+          user?.email ||
+          'Không tên',
+        role: baseRole,
+        displayRole,
+        parkingLot: lot
+          ? {
+              code: lot.mabaido,
+              name: lot.tenbaido,
+              joinCode: lot.mathamgia,
+            }
+          : null,
+        canSwitchLots: item.duocchuyenbai ?? false,
+        maadmin: item.maadmin || '',
+        manhanvien: item.manhanvien || null,
+        ngayvaolam: item.ngayvaolam || null,
+        nghiviec: item.nghiviec ?? false,
+        sodt: item.sodt || null,
+        anhdaidien: item.anhdaidien ?? null,
+      };
+    });
+
+    setStaffList(mapped);
+  };
 
   const loadData = async () => {
     const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -243,7 +547,13 @@ const fetchStaff = async (adminId: string) => {
     }
 
     setCurrentAdminId(user.id);
-    await Promise.all([fetchParkingLots(user.id), fetchStaff(user.id)]);
+await loadAdminPinState(user.id, user.email ?? "");
+
+    const logs = await fetchEmploymentLogs(user.id);
+    await Promise.all([
+      fetchParkingLots(user.id),
+      fetchStaff(user.id, logs),
+    ]);
   };
 
   useEffect(() => {
@@ -254,17 +564,21 @@ const fetchStaff = async (adminId: string) => {
     return staffList.filter((staff) => {
       if (filterRole !== 'all' && staff.role !== filterRole) return false;
 
+      if (filterStatus === 'active' && staff.nghiviec) return false;
+      if (filterStatus === 'inactive' && !staff.nghiviec) return false;
+
       const q = searchQuery.trim().toLowerCase();
       if (!q) return true;
 
       return (
         staff.displayName.toLowerCase().includes(q) ||
         staff.email.toLowerCase().includes(q) ||
+        (staff.manhanvien || '').toLowerCase().includes(q) ||
         (staff.parkingLot?.name || '').toLowerCase().includes(q) ||
         (staff.parkingLot?.joinCode || '').toLowerCase().includes(q)
       );
     });
-  }, [staffList, filterRole, searchQuery]);
+  }, [staffList, filterRole, filterStatus, searchQuery]);
 
   const checkTargetUser = async (): Promise<UserRow | null> => {
     const email = newEmail.trim().toLowerCase();
@@ -292,6 +606,32 @@ const fetchStaff = async (adminId: string) => {
     }
 
     return data as UserRow;
+  };
+
+  const generateNextStaffCode = async (adminId: string) => {
+    const { data, error } = await supabase
+      .from('ctnhanvien')
+      .select('manhanvien')
+      .eq('maadmin', adminId);
+
+    if (error) {
+      console.error('GENERATE CODE ERROR:', error);
+      throw error;
+    }
+
+    const maxNum = (data ?? []).reduce((max, row: any) => {
+      return Math.max(max, normalizeCodeNumber(row.manhanvien));
+    }, 0);
+
+    return `NV${String(maxNum + 1).padStart(4, '0')}`;
+  };
+
+  const insertHistory = async (payload: Partial<EmploymentLogRow>) => {
+    const { error } = await supabase.from('nhatkynghiviec').insert(payload);
+    if (error) {
+      console.error('INSERT HISTORY ERROR:', error);
+      throw error;
+    }
   };
 
   const handleSendInvite = async () => {
@@ -337,13 +677,13 @@ const fetchStaff = async (adminId: string) => {
       }
 
       if (targetUser.chucnang !== 'owner') {
-        toast.error('Chỉ có thể mời chủ xe');
+        toast.error('Chỉ có thể mời tài khoản người dùng');
         return;
       }
 
       const { data: existingStaff, error: existingError } = await supabase
         .from('ctnhanvien')
-        .select('manguoidung, maadmin')
+        .select('manguoidung, maadmin, nghiviec')
         .eq('manguoidung', targetUser.manguoidung)
         .maybeSingle();
 
@@ -355,7 +695,11 @@ const fetchStaff = async (adminId: string) => {
 
       if (existingStaff) {
         if (existingStaff.maadmin === currentAdminId) {
-          toast.error('Nhân viên đã có trong hệ thống của bạn');
+          if (existingStaff.nghiviec) {
+            toast.error('Tài khoản này đang thôi việc. Hãy dùng nút hoạt động lại.');
+          } else {
+            toast.error('Nhân viên đã có trong hệ thống của bạn');
+          }
         } else {
           toast.error('Người này đang thuộc hệ thống khác');
         }
@@ -387,7 +731,7 @@ const fetchStaff = async (adminId: string) => {
         return;
       }
 
-      toast.success('Đã gửi lời mời đến chủ xe');
+      toast.success('Đã gửi lời mời đến Người dùng');
       resetForm();
       setShowAddStaff(false);
     } finally {
@@ -408,45 +752,154 @@ const fetchStaff = async (adminId: string) => {
       return;
     }
 
+    await insertHistory({
+      maadmin: currentAdminId,
+      manguoidung: staff.manguoidung,
+      hoten: staff.displayName,
+      email: staff.email,
+      manhanvien_cu: staff.manhanvien,
+      manhanvien_moi: staff.manhanvien,
+      ngayvaolam_cu: staff.ngayvaolam,
+      chucnang_cu: staff.displayRole,
+      chucnang_moi: staff.displayRole,
+      nghiviec_cu: staff.nghiviec,
+      nghiviec_moi: staff.nghiviec,
+      hanhdong: 'toggle_switch_permission',
+      ghichu: staff.canSwitchLots ? 'Thu hồi quyền đổi bãi' : 'Cấp quyền đổi bãi',
+    });
+
     toast.success(staff.canSwitchLots ? 'Đã thu hồi quyền đổi bãi' : 'Đã cấp quyền đổi bãi');
-    await fetchStaff(currentAdminId);
+    await Promise.all([fetchStaff(currentAdminId), fetchEmploymentLogs(currentAdminId)]);
   };
 
-  const handleDeleteStaff = async (staff: StaffRecord) => {
-    if (!confirm('Xóa nhân viên khỏi bãi đỗ này?')) return;
+  const handleToggleEmploymentStatus = async (staff: StaffRecord) => {
+    if (!currentAdminId) return;
 
-    const { error: deleteError } = await supabase
-      .from('ctnhanvien')
-      .delete()
-      .eq('manguoidung', staff.manguoidung)
-      .eq('maadmin', currentAdminId);
+    setIsLoading(true);
+    try {
+      if (!staff.nghiviec) {
+        const { error: staffError } = await supabase
+          .from('ctnhanvien')
+          .update({ nghiviec: true })
+          .eq('manguoidung', staff.manguoidung)
+          .eq('maadmin', currentAdminId);
 
-    if (deleteError) {
-      console.error('DELETE STAFF ERROR:', deleteError);
-      toast.error('Xóa thất bại');
-      return;
+        if (staffError) {
+          console.error('DEACTIVATE STAFF ERROR:', staffError);
+          toast.error('Không thể chuyển sang trạng thái thôi việc');
+          return;
+        }
+
+        const { error: roleError } = await supabase
+          .from('nguoidung')
+          .update({ chucnang: 'owner' })
+          .eq('manguoidung', staff.manguoidung);
+
+        if (roleError) {
+          console.error('REVERT ROLE ERROR:', roleError);
+          toast.error('Đã thôi việc nhưng lỗi trả role về owner');
+          return;
+        }
+
+        await insertHistory({
+          maadmin: currentAdminId,
+          manguoidung: staff.manguoidung,
+          hoten: staff.displayName,
+          email: staff.email,
+          manhanvien_cu: staff.manhanvien,
+          manhanvien_moi: staff.manhanvien,
+          ngayvaolam_cu: staff.ngayvaolam,
+          chucnang_cu: staff.displayRole,
+          chucnang_moi: 'owner',
+          nghiviec_cu: false,
+          nghiviec_moi: true,
+          hanhdong: 'deactivate',
+          ghichu: 'Cho thôi việc',
+        });
+
+        toast.success('Đã chuyển tài khoản sang thôi việc');
+      } else {
+        const { data: currentUser, error: currentUserError } = await supabase
+          .from('nguoidung')
+          .select('chucnang')
+          .eq('manguoidung', staff.manguoidung)
+          .maybeSingle();
+
+        if (currentUserError) {
+          console.error('CHECK CURRENT USER ROLE ERROR:', currentUserError);
+          toast.error('Không thể kiểm tra quyền truy cập hiện tại');
+          return;
+        }
+
+        if (!currentUser || currentUser.chucnang !== 'owner') {
+          toast.error('Chỉ tài khoản có quyền truy cập là người dùng mới được hoạt động lại');
+          return;
+        }
+
+        const newCode = await generateNextStaffCode(currentAdminId);
+        
+        const latestLog = getLatestLogForUser(staff.manguoidung);
+        const restoreRole =
+          (latestLog?.chucnang_cu && latestLog.chucnang_cu !== 'owner'
+            ? latestLog.chucnang_cu
+            : 'support') || 'support';
+
+        const { error: staffError } = await supabase
+          .from('ctnhanvien')
+          .update({
+            nghiviec: false,
+            manhanvien: newCode,
+            ngayvaolam: new Date().toISOString(),
+          })
+          .eq('manguoidung', staff.manguoidung)
+          .eq('maadmin', currentAdminId);
+
+        if (staffError) {
+          console.error('REACTIVATE STAFF ERROR:', staffError);
+          toast.error('Không thể hoạt động lại tài khoản');
+          return;
+        }
+
+        const { error: roleError } = await supabase
+          .from('nguoidung')
+          .update({ chucnang: restoreRole })
+          .eq('manguoidung', staff.manguoidung);
+
+        if (roleError) {
+          console.error('RESTORE ROLE ERROR:', roleError);
+          toast.error('Đã hoạt động lại nhưng lỗi khôi phục quyền truy cập');
+          return;
+        }
+
+        await insertHistory({
+          maadmin: currentAdminId,
+          manguoidung: staff.manguoidung,
+          hoten: staff.displayName,
+          email: staff.email,
+          manhanvien_cu: staff.manhanvien,
+          manhanvien_moi: newCode,
+          ngayvaolam_cu: staff.ngayvaolam,
+          chucnang_cu: 'owner',
+          chucnang_moi: restoreRole,
+          nghiviec_cu: true,
+          nghiviec_moi: false,
+          hanhdong: 'reactivate',
+          ghichu: 'Kích hoạt lại tài khoản',
+        });
+
+        toast.success(`Đã hoạt động lại và tạo mã mới ${newCode}`);
+      }
+
+      await Promise.all([fetchStaff(currentAdminId), fetchEmploymentLogs(currentAdminId)]);
+    } finally {
+      setIsLoading(false);
     }
-
-    const { error: revertRoleError } = await supabase
-      .from('nguoidung')
-      .update({ chucnang: 'owner' })
-      .eq('manguoidung', staff.manguoidung);
-
-    if (revertRoleError) {
-      console.error('REVERT ROLE ERROR:', revertRoleError);
-      toast.error('Đã xóa nhân viên nhưng lỗi trả vai trò về owner');
-      await fetchStaff(currentAdminId);
-      return;
-    }
-
-    toast.success('Đã xóa nhân viên và trả vai trò về chủ xe');
-    await fetchStaff(currentAdminId);
   };
 
   const handleOpenEditStaff = (staff: StaffRecord) => {
     setEditingStaff(staff);
     setEditDisplayName(staff.displayName || '');
-    setEditRole(staff.role === 'supervisor' ? 'supervisor' : 'support');
+    setEditRole(staff.displayRole === 'supervisor' ? 'supervisor' : 'support');
     setEditParkingLot(staff.parkingLot?.code || '');
     setEditCanSwitchLots(staff.canSwitchLots);
     setShowEditStaff(true);
@@ -471,20 +924,20 @@ const fetchStaff = async (adminId: string) => {
       const { error: userError } = await supabase
         .from('nguoidung')
         .update({
-          tennguoidung: trimmedName,
           chucnang: editRole,
         })
         .eq('manguoidung', editingStaff.manguoidung);
 
       if (userError) {
         console.error('UPDATE USER ERROR:', userError);
-        toast.error('Không thể cập nhật thông tin người dùng');
+        toast.error('Không thể cập nhật chức vụ người dùng');
         return;
       }
 
       const { error: staffError } = await supabase
         .from('ctnhanvien')
         .update({
+          hoten: trimmedName,
           mabaido: editParkingLot,
           duocchuyenbai: editCanSwitchLots,
         })
@@ -493,18 +946,37 @@ const fetchStaff = async (adminId: string) => {
 
       if (staffError) {
         console.error('UPDATE STAFF ERROR:', staffError);
-        toast.error('Không thể cập nhật bãi đỗ / quyền đổi bãi');
+        toast.error('Không thể cập nhật thông tin nhân viên');
         return;
       }
+
+      await insertHistory({
+        maadmin: currentAdminId,
+        manguoidung: editingStaff.manguoidung,
+        hoten: trimmedName,
+        email: editingStaff.email,
+        manhanvien_cu: editingStaff.manhanvien,
+        manhanvien_moi: editingStaff.manhanvien,
+        ngayvaolam_cu: editingStaff.ngayvaolam,
+        chucnang_cu: editingStaff.displayRole,
+        chucnang_moi: editRole,
+        nghiviec_cu: editingStaff.nghiviec,
+        nghiviec_moi: editingStaff.nghiviec,
+        hanhdong: 'update',
+        ghichu: 'Cập nhật thông tin nhân viên',
+      });
 
       toast.success('Đã cập nhật nhân viên');
       setShowEditStaff(false);
       resetEditForm();
-      await fetchStaff(currentAdminId);
+      await Promise.all([fetchStaff(currentAdminId), fetchEmploymentLogs(currentAdminId)]);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const latestActiveCount = staffList.filter((s) => !s.nghiviec).length;
+  const inactiveCount = staffList.filter((s) => s.nghiviec).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-50">
@@ -523,7 +995,7 @@ const fetchStaff = async (adminId: string) => {
                 Quản lý nhân viên
               </h1>
               <p className="text-purple-100 text-sm">
-                Phân quyền theo bãi đỗ, không dùng zone
+                Phân quyền theo bãi đỗ, hỗ trợ mã nhân viên, nghỉ việc và hoạt động lại
               </p>
             </div>
             <button
@@ -531,22 +1003,33 @@ const fetchStaff = async (adminId: string) => {
               className="bg-white text-purple-600 px-6 py-3 rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
             >
               <UserPlus className="w-5 h-5" />
-              Mời chủ xe
+              Mời Người dùng
             </button>
+            <button
+  onClick={() => setShowPinManager(true)}
+  className="bg-indigo-600 text-white px-6 py-3 rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
+>
+  <Key className="w-5 h-5" />
+  Quản lý PIN admin
+</button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
               <div className="text-white/80 text-sm mb-1">Tổng nhân viên</div>
               <div className="text-2xl">{staffList.length}</div>
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-              <div className="text-white/80 text-sm mb-1">Giám sát viên</div>
-              <div className="text-2xl">{staffList.filter((s) => s.role === 'supervisor').length}</div>
+              <div className="text-white/80 text-sm mb-1">Đang hoạt động</div>
+              <div className="text-2xl">{latestActiveCount}</div>
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
-              <div className="text-white/80 text-sm mb-1">Nhân viên hỗ trợ</div>
-              <div className="text-2xl">{staffList.filter((s) => s.role === 'support').length}</div>
+              <div className="text-white/80 text-sm mb-1">Đã thôi việc</div>
+              <div className="text-2xl">{inactiveCount}</div>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4">
+              <div className="text-white/80 text-sm mb-1">Giám sát viên</div>
+              <div className="text-2xl">{staffList.filter((s) => s.displayRole === 'supervisor').length}</div>
             </div>
           </div>
         </div>
@@ -561,7 +1044,7 @@ const fetchStaff = async (adminId: string) => {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Tìm theo tên, email, tên bãi hoặc mã tham gia..."
+                placeholder="Tìm theo tên, email, mã NV, tên bãi hoặc mã tham gia..."
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
               />
             </div>
@@ -574,6 +1057,15 @@ const fetchStaff = async (adminId: string) => {
               <option value="supervisor">Giám sát viên</option>
               <option value="support">Nhân viên hỗ trợ</option>
             </select>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value as EmploymentStatusFilter)}
+              className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
+            >
+              <option value="all">Tất cả trạng thái</option>
+              <option value="active">Đang hoạt động</option>
+              <option value="inactive">Đã thôi việc</option>
+            </select>
           </div>
         </div>
 
@@ -584,106 +1076,225 @@ const fetchStaff = async (adminId: string) => {
               <p className="text-gray-500">Không tìm thấy nhân viên</p>
             </div>
           ) : (
-            filteredStaff.map((staff) => (
-              <div key={staff.manguoidung} className="bg-white rounded-xl shadow-md p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-4 flex-1">
-                    <div
-                      className={`w-14 h-14 rounded-full flex items-center justify-center text-white text-xl ${
-                        staff.role === 'supervisor' ? 'bg-green-500' : 'bg-blue-500'
-                      }`}
-                    >
-                      {staff.displayName?.[0] || 'U'}
-                    </div>
+            filteredStaff.map((staff) => {
+              const latestLog = getLatestLogForUser(staff.manguoidung);
 
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <h3 className="text-xl text-gray-900">{staff.displayName}</h3>
-                        <span className={`px-3 py-1 rounded-full text-sm ${getRoleBadgeClass(staff.role)}`}>
-                          {getRoleLabel(staff.role)}
-                        </span>
-                        <span className="px-3 py-1 rounded-full text-sm bg-gray-100 text-gray-700">
-                          {staff.role}
-                        </span>
-                      </div>
+              return (
+                <div key={staff.manguoidung} className="bg-white rounded-xl shadow-md p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-4 flex-1">
+                      <div className="w-14 h-14 rounded-full overflow-hidden bg-gray-200 shrink-0">
+  {staff.anhdaidien ? (
+    <img
+      src={staff.anhdaidien}
+      alt={staff.displayName}
+      className="w-full h-full object-cover"
+    />
+  ) : (
+    <div
+      className={`w-full h-full flex items-center justify-center text-white text-xl ${
+        staff.displayRole === 'supervisor' ? 'bg-green-500' : 'bg-blue-500'
+      }`}
+    >
+      {staff.displayName?.[0] || 'U'}
+    </div>
+  )}
+</div>
 
-                      <div className="flex items-center gap-2 text-sm text-gray-600 mb-3 flex-wrap">
-                        <Key className="w-4 h-4" />
-                        <span className="font-mono">{staff.email}</span>
-                        <span className="text-gray-400">•</span>
-                        <span>{staff.manguoidung}</span>
-                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2 flex-wrap">
+                          <h3 className="text-xl text-gray-900">{staff.displayName}</h3>
 
-                      <div className="space-y-2">
-                        <div className="flex items-start gap-2">
-                          <MapPin className="w-4 h-4 text-purple-600 mt-0.5" />
-                          <div className="flex-1">
-                            <span className="text-sm text-gray-700">Bãi đỗ được phân quyền:</span>
-                            <div className="flex flex-wrap gap-2 mt-1">
-                              {staff.parkingLot ? (
-                                <>
-                                  <span className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full">
-                                    {staff.parkingLot.name}
-                                  </span>
-                                  <span className="text-sm bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">
-                                    Mã tham gia: {staff.parkingLot.joinCode || 'N/A'}
-                                  </span>
-                                </>
-                              ) : (
-                                <span className="text-sm bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
-                                  Chưa gán bãi đỗ
-                                </span>
-                              )}
-                            </div>
+                          <span className={`px-3 py-1 rounded-full text-sm ${getRoleBadgeClass(staff.displayRole)}`}>
+  {getRoleLabel(staff.displayRole)}
+</span>
+
+                          <span className={`px-3 py-1 rounded-full text-sm ${getStatusBadgeClass(staff.nghiviec)}`}>
+                            {staff.nghiviec ? 'Đã thôi việc' : 'Đang hoạt động'}
+                          </span>
+
+                          {staff.manhanvien && (
+                            <span className="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-700">
+                              Mã NV: {staff.manhanvien}
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="flex items-center gap-2 text-sm text-gray-600 mb-3 flex-wrap">
+                          <Key className="w-4 h-4" />
+                          <span className="font-mono">{staff.email}</span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                          <div className="rounded-lg border border-gray-200 p-3">
+                            <div className="text-xs text-gray-500 mb-1">Mã nhân viên hiện tại</div>
+                            <div className="font-semibold text-gray-900">{staff.manhanvien || 'Chưa có'}</div>
+                          </div>
+                          <div className="rounded-lg border border-gray-200 p-3">
+                            <div className="text-xs text-gray-500 mb-1">Ngày vào làm hiện tại</div>
+                            <div className="font-semibold text-gray-900">{formatDateTime(staff.ngayvaolam)}</div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Key className="w-4 h-4 text-indigo-600" />
-                          <span className="text-sm text-gray-700">Quyền đổi bãi:</span>
-                          {staff.canSwitchLots ? (
-                            <span className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold">
-                              ✅ Đã cấp phép
-                            </span>
-                          ) : (
-                            <span className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">
-                              ❌ Chưa cấp phép
-                            </span>
-                          )}
-                          <button
-                            onClick={() => handleToggleSwitchPermission(staff)}
-                            className={`text-xs px-3 py-1 rounded-lg transition-all ${
-                              staff.canSwitchLots
-                                ? 'bg-red-100 text-red-700 hover:bg-red-200'
-                                : 'bg-green-100 text-green-700 hover:bg-green-200'
-                            }`}
-                          >
-                            {staff.canSwitchLots ? 'Thu hồi' : 'Cấp phép'}
-                          </button>
+                        {latestLog && (
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                            <div className="rounded-lg border border-dashed border-gray-300 p-3 bg-gray-50">
+                              <div className="text-xs text-gray-500 mb-1">Mã nhân viên cũ</div>
+                              <div className="font-semibold text-gray-900">
+                                {latestLog.manhanvien_cu || 'N/A'}
+                              </div>
+                            </div>
+                            <div className="rounded-lg border border-dashed border-gray-300 p-3 bg-gray-50">
+                              <div className="text-xs text-gray-500 mb-1">Ngày vào làm cũ</div>
+                              <div className="font-semibold text-gray-900">
+                                {formatDateTime(latestLog.ngayvaolam_cu)}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="space-y-2">
+                          <div className="flex items-start gap-2">
+                            <MapPin className="w-4 h-4 text-purple-600 mt-0.5" />
+                            <div className="flex-1">
+                              <span className="text-sm text-gray-700">Bãi đỗ được phân quyền:</span>
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {staff.parkingLot ? (
+                                  <>
+                                    <span className="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded-full">
+                                      {staff.parkingLot.name}
+                                    </span>
+                                    <span className="text-sm bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full">
+                                      Mã tham gia: {staff.parkingLot.joinCode || 'N/A'}
+                                    </span>
+                                  </>
+                                ) : (
+                                  <span className="text-sm bg-gray-100 text-gray-600 px-3 py-1 rounded-full">
+                                    Chưa gán bãi đỗ
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Key className="w-4 h-4 text-indigo-600" />
+                            <span className="text-sm text-gray-700">Quyền đổi bãi:</span>
+                            {staff.canSwitchLots ? (
+                              <span className="text-sm bg-green-100 text-green-700 px-3 py-1 rounded-full font-semibold">
+                                ✅ Đã cấp phép
+                              </span>
+                            ) : (
+                              <span className="text-sm bg-red-100 text-red-700 px-3 py-1 rounded-full font-semibold">
+                                ❌ Chưa cấp phép
+                              </span>
+                            )}
+                            <button
+                              onClick={() => handleToggleSwitchPermission(staff)}
+                              className={`text-xs px-3 py-1 rounded-lg transition-all ${
+                                staff.canSwitchLots
+                                  ? 'bg-red-100 text-red-700 hover:bg-red-200'
+                                  : 'bg-green-100 text-green-700 hover:bg-green-200'
+                              }`}
+                            >
+                              {staff.canSwitchLots ? 'Thu hồi' : 'Cấp phép'}
+                            </button>
+                          </div>
                         </div>
+                      </div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleOpenEditStaff(staff)}
+                        className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-all"
+                        title="Chỉnh sửa"
+                      >
+                        <Pencil className="w-5 h-5" />
+                      </button>
+
+                      <button
+                        onClick={() => handleToggleEmploymentStatus(staff)}
+                        className={`p-2 rounded-lg transition-all ${
+                          staff.nghiviec
+                            ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                            : 'bg-red-100 text-red-600 hover:bg-red-200'
+                        }`}
+                        title={staff.nghiviec ? 'Hoạt động lại' : 'Cho thôi việc'}
+                      >
+                        {staff.nghiviec ? <RefreshCw className="w-5 h-5" /> : <UserX className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-md p-6 mt-8">
+          <div className="flex items-center gap-2 mb-4">
+            <History className="w-5 h-5 text-purple-600" />
+            <h2 className="text-xl font-semibold text-gray-900">Nhật ký hoạt động</h2>
+          </div>
+
+          {employmentLogs.length === 0 ? (
+            <div className="text-sm text-gray-500">Chưa có nhật ký nào.</div>
+          ) : (
+            <div className="space-y-3">
+              {employmentLogs.map((log) => (
+                <div key={log.id} className="rounded-xl border border-gray-200 p-4 bg-gray-50">
+                  <div className="flex items-start justify-between gap-4 flex-wrap">
+                    <div>
+                      <div className="font-semibold text-gray-900">{log.hoten || 'Không tên'}</div>
+                      <div className="text-sm text-gray-600 font-mono">{log.email || 'N/A'}</div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Thời điểm: {formatDateTime(log.created_at)}
+                      </div>
+                    </div>
+
+                    <span className="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-700">
+                      {log.hanhdong}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="text-xs text-gray-500">Mã NV cũ</div>
+                      <div className="font-medium">{log.manhanvien_cu || 'N/A'}</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="text-xs text-gray-500">Mã NV mới</div>
+                      <div className="font-medium">{log.manhanvien_moi || 'N/A'}</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="text-xs text-gray-500">Ngày vào làm cũ</div>
+                      <div className="font-medium">{formatDateTime(log.ngayvaolam_cu)}</div>
+                    </div>
+                    <div className="bg-white rounded-lg p-3 border border-gray-200">
+                      <div className="text-xs text-gray-500">Trạng thái</div>
+                      <div className="font-medium">
+                        {log.nghiviec_moi ? 'Đã thôi việc' : 'Đang hoạt động'}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleOpenEditStaff(staff)}
-                      className="p-2 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 transition-all"
-                      title="Chỉnh sửa"
-                    >
-                      <Pencil className="w-5 h-5" />
-                    </button>
-                    <button
-                      onClick={() => handleDeleteStaff(staff)}
-                      className="p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-all"
-                      title="Xóa"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
+                  <div className="mt-3 text-sm text-gray-700">
+                    <div>
+                      <strong>Quyền truy cập cũ:</strong> {getAccessLabel(log.chucnang_cu)}
+                    </div>
+                    <div>
+                      <strong>Quyền truy cập mới:</strong> {getAccessLabel(log.chucnang_moi)}
+                    </div>
+                    {log.ghichu && (
+                      <div className="mt-1">
+                        <strong>Ghi chú:</strong> {log.ghichu}
+                      </div>
+                    )}
                   </div>
                 </div>
-              </div>
-            ))
+              ))}
+            </div>
           )}
         </div>
       </div>
@@ -692,20 +1303,30 @@ const fetchStaff = async (adminId: string) => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-8 max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl text-gray-900 flex items-center gap-2">
-                <UserPlus className="w-7 h-7 text-purple-600" />
-                Mời chủ xe trở thành nhân viên
-              </h2>
-              <button
-                onClick={() => {
-                  setShowAddStaff(false);
-                  resetForm();
-                }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-all"
-              >
-                ✕
-              </button>
-            </div>
+  <h2 className="text-2xl text-gray-900 flex items-center gap-2">
+    <UserPlus className="w-7 h-7 text-purple-600" />
+    Mời Người dùng trở thành nhân viên
+  </h2>
+
+  <div className="flex items-center gap-2">
+    <button
+      onClick={() => setShowPinManager(true)}
+      className="bg-indigo-600 text-white px-4 py-2 rounded-lg"
+    >
+      Quản lý PIN
+    </button>
+
+    <button
+      onClick={() => {
+        setShowAddStaff(false);
+        resetForm();
+      }}
+      className="p-2 hover:bg-gray-100 rounded-lg"
+    >
+      ✕
+    </button>
+  </div>
+</div>
 
             <div className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -717,7 +1338,7 @@ const fetchStaff = async (adminId: string) => {
                     type="text"
                     value={newEmail}
                     onChange={(e) => setNewEmail(e.target.value)}
-                    placeholder="VD: user@gmail.com"
+                    placeholder="VD: user@domain.com"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
                   />
                 </div>
@@ -729,7 +1350,7 @@ const fetchStaff = async (adminId: string) => {
                     type="text"
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    placeholder="VD: Nguyễn Văn A"
+                    placeholder="VD: Nhân Viên Hỗ Trợ"
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none"
                   />
                 </div>
@@ -837,32 +1458,40 @@ const fetchStaff = async (adminId: string) => {
                 </div>
                 {canSwitchLots && (
                   <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 text-sm text-yellow-800">
-                    ⚠️ Quyền này sẽ được lưu ở bảng <strong>ctnhanvien</strong> trong trường{' '}
-                    <strong>duocchuyenbai</strong>.
+                    ⚠️ Quyền này sẽ cấp chức năng <strong>chuyển bãi đỗ</strong> trong hệ thống, nhân viên cần nhập{' '}
+                    <strong>mã pin admin</strong>{' '}để được chuyển bãi.
                   </div>
                 )}
               </div>
 
-              <div className={`rounded-lg p-4 ${
-                newRole === 'supervisor'
-                  ? 'bg-green-50 border border-green-200'
-                  : 'bg-blue-50 border border-blue-200'
-              }`}>
-                <div className={`text-sm ${newRole === 'supervisor' ? 'text-green-800' : 'text-blue-800'}`}>
+              <div
+                className={`rounded-lg p-4 ${
+                  newRole === 'supervisor'
+                    ? 'bg-green-50 border border-green-200'
+                    : 'bg-blue-50 border border-blue-200'
+                }`}
+              >
+                <div
+                  className={`text-sm ${
+                    newRole === 'supervisor' ? 'text-green-800' : 'text-blue-800'
+                  }`}
+                >
                   {newRole === 'supervisor' ? (
                     <>
-                      <strong>Giám sát viên</strong> sẽ được gửi thông báo chờ xác nhận. Khi chủ xe xác nhận, hệ thống sẽ:
+                      <strong>Nhân viên giám sát</strong> sẽ được gửi thông báo chờ xác nhận. Khi tài khoản người dùng xác nhận, hệ thống sẽ:
                       <ul className="list-disc list-inside mt-2 space-y-1">
-                        <li>Đổi <strong>chucnang</strong> từ <strong>owner</strong> sang <strong>supervisor</strong></li>
+                        <li>Đổi <strong>quyền truy cập</strong> từ <strong>người dùng</strong> sang <strong>nhân viên giám sát</strong></li>
+                        <li>Tạo mã nhân viên mới</li>
                         <li>Gán vào bãi đỗ đã chọn</li>
                         <li>Lưu quyền đổi bãi nếu đã bật</li>
                       </ul>
                     </>
                   ) : (
                     <>
-                      <strong>Nhân viên hỗ trợ</strong> sẽ được gửi thông báo chờ xác nhận. Khi chủ xe xác nhận, hệ thống sẽ:
+                      <strong>Nhân viên hỗ trợ</strong> sẽ được gửi thông báo chờ xác nhận. Khi tài khoản người dùng xác nhận, hệ thống sẽ:
                       <ul className="list-disc list-inside mt-2 space-y-1">
-                        <li>Đổi <strong>chucnang</strong> từ <strong>owner</strong> sang <strong>support</strong></li>
+                        <li>Đổi <strong>quyền truy cập</strong> từ <strong>người dùng</strong> sang <strong>nhân viên hỗ trợ</strong></li>
+                        <li>Tạo mã nhân viên mới</li>
                         <li>Gán vào bãi đỗ đã chọn</li>
                         <li>Lưu quyền đổi bãi nếu đã bật</li>
                       </ul>
@@ -893,6 +1522,165 @@ const fetchStaff = async (adminId: string) => {
           </div>
         </div>
       )}
+{showPinManager && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="w-full max-w-3xl rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Key className="w-6 h-6 text-indigo-600" />
+            Quản lý PIN admin
+          </h2>
+          <p className="text-sm text-gray-500">
+            PIN tạo lần đầu nằm ở <span className="font-semibold">ctadmin.mapinadmin</span>
+          </p>
+        </div>
+
+        <button
+          onClick={() => setShowPinManager(false)}
+          className="rounded-lg px-3 py-2 text-gray-500 hover:bg-gray-100"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <div className="rounded-2xl border border-purple-100 bg-purple-50 p-5">
+          <h3 className="mb-4 text-lg font-semibold text-gray-900">
+            {hasAdminPin ? "Đổi PIN hiện tại" : "Tạo PIN lần đầu"}
+          </h3>
+
+          {!hasAdminPin ? (
+            <div className="space-y-4">
+              <input
+                type="password"
+                value={createPin}
+                onChange={(e) => setCreatePin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                placeholder="PIN mới 8 số"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none"
+              />
+              <input
+                type="password"
+                value={createConfirmPin}
+                onChange={(e) => setCreateConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                placeholder="Nhập lại PIN"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none"
+              />
+              <button
+                onClick={handleCreatePin}
+                disabled={loadingPin}
+                className="w-full rounded-xl bg-emerald-600 py-3 font-semibold text-white disabled:opacity-60"
+              >
+                {loadingPin ? "Đang tạo..." : "Tạo PIN"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="relative">
+                <input
+                  type="password"
+                  value={oldPin}
+                  onChange={(e) => setOldPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                  placeholder="PIN cũ"
+                  className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none"
+                />
+              </div>
+              <input
+                type="password"
+                value={newPin}
+                onChange={(e) => setNewPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                placeholder="PIN mới 8 số"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none"
+              />
+              <input
+                type="password"
+                value={confirmPin}
+                onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                placeholder="Nhập lại PIN"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none"
+              />
+              <button
+                onClick={handleChangePin}
+                disabled={loadingPin}
+                className="w-full rounded-xl bg-indigo-600 py-3 font-semibold text-white disabled:opacity-60"
+              >
+                {loadingPin ? "Đang đổi..." : "Đổi PIN"}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-blue-100 bg-blue-50 p-5">
+          <h3 className="mb-4 text-lg font-semibold text-gray-900">Quên PIN</h3>
+
+          {pinStep === "email" && (
+            <div className="space-y-4">
+              <div className="rounded-xl bg-white p-4 text-sm text-gray-700">
+                Email nhận OTP: <strong>{adminEmail || "Không lấy được email"}</strong>
+              </div>
+              <button
+                onClick={handleSendOtp}
+                disabled={loadingPin || !adminEmail}
+                className="w-full rounded-xl bg-blue-600 py-3 font-semibold text-white disabled:opacity-60"
+              >
+                {loadingPin ? "Đang gửi..." : "Gửi OTP"}
+              </button>
+            </div>
+          )}
+
+          {pinStep === "otp" && (
+            <div className="space-y-4">
+              <div className="rounded-xl bg-white p-4 text-sm text-gray-700">
+                OTP đã gửi đến: <strong>{adminEmail}</strong>
+              </div>
+              <input
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                placeholder="Nhập OTP 8 số"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-center tracking-[0.3em] outline-none"
+              />
+              <button
+                onClick={handleVerifyOtp}
+                disabled={loadingPin}
+                className="w-full rounded-xl bg-indigo-600 py-3 font-semibold text-white disabled:opacity-60"
+              >
+                {loadingPin ? "Đang kiểm tra..." : "Xác thực OTP"}
+              </button>
+            </div>
+          )}
+
+          {pinStep === "reset" && (
+            <div className="space-y-4">
+              <input
+                type="password"
+                value={resetPin}
+                onChange={(e) => setResetPin(e.target.value.replace(/\D/g, "").slice(0, 8))}
+                placeholder="PIN mới 8 số"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none"
+              />
+              <input
+                type="password"
+                value={resetConfirmPin}
+                onChange={(e) =>
+                  setResetConfirmPin(e.target.value.replace(/\D/g, "").slice(0, 8))
+                }
+                placeholder="Nhập lại PIN"
+                className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 outline-none"
+              />
+              <button
+                onClick={handleResetPin}
+                disabled={loadingPin}
+                className="w-full rounded-xl bg-emerald-600 py-3 font-semibold text-white disabled:opacity-60"
+              >
+                {loadingPin ? "Đang lưu..." : "Đặt lại PIN"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
 
       {showEditStaff && editingStaff && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -928,15 +1716,24 @@ const fetchStaff = async (adminId: string) => {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-700 mb-2">
-                    Email
-                  </label>
+                  <label className="block text-sm text-gray-700 mb-2">Email</label>
                   <input
                     type="text"
                     value={editingStaff.email}
                     disabled
                     className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-gray-50 text-gray-600 outline-none"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <div className="text-sm text-gray-500 mb-1">Mã nhân viên hiện tại</div>
+                  <div className="font-semibold text-gray-900">{editingStaff.manhanvien || 'Chưa có'}</div>
+                </div>
+                <div className="rounded-lg border border-gray-200 p-4">
+                  <div className="text-sm text-gray-500 mb-1">Ngày vào làm hiện tại</div>
+                  <div className="font-semibold text-gray-900">{formatDateTime(editingStaff.ngayvaolam)}</div>
                 </div>
               </div>
 
@@ -1042,18 +1839,25 @@ const fetchStaff = async (adminId: string) => {
                 </div>
               </div>
 
-              <div className={`rounded-lg p-4 ${
-                editRole === 'supervisor'
-                  ? 'bg-green-50 border border-green-200'
-                  : 'bg-blue-50 border border-blue-200'
-              }`}>
-                <div className={`text-sm ${editRole === 'supervisor' ? 'text-green-800' : 'text-blue-800'}`}>
+              <div
+                className={`rounded-lg p-4 ${
+                  editRole === 'supervisor'
+                    ? 'bg-green-50 border border-green-200'
+                    : 'bg-blue-50 border border-blue-200'
+                }`}
+              >
+                <div
+                  className={`text-sm ${
+                    editRole === 'supervisor' ? 'text-green-800' : 'text-blue-800'
+                  }`}
+                >
                   {editRole === 'supervisor' ? (
                     <>
                       <strong>Giám sát viên</strong> sẽ được cập nhật trực tiếp:
                       <ul className="list-disc list-inside mt-2 space-y-1">
                         <li>Đổi <strong>chucnang</strong> sang <strong>supervisor</strong></li>
-                        <li>Đổi bãi đỗ đang phụ trách</li>
+                        <li>Cập nhật tên hiển thị ở <strong>ctnhanvien.hoten</strong></li>
+                        <li>Cập nhật bãi đỗ đang phụ trách</li>
                         <li>Cập nhật quyền đổi bãi nếu bật</li>
                       </ul>
                     </>
@@ -1062,7 +1866,8 @@ const fetchStaff = async (adminId: string) => {
                       <strong>Nhân viên hỗ trợ</strong> sẽ được cập nhật trực tiếp:
                       <ul className="list-disc list-inside mt-2 space-y-1">
                         <li>Đổi <strong>chucnang</strong> sang <strong>support</strong></li>
-                        <li>Đổi bãi đỗ đang phụ trách</li>
+                        <li>Cập nhật tên hiển thị ở <strong>ctnhanvien.hoten</strong></li>
+                        <li>Cập nhật bãi đỗ đang phụ trách</li>
                         <li>Cập nhật quyền đổi bãi nếu bật</li>
                       </ul>
                     </>

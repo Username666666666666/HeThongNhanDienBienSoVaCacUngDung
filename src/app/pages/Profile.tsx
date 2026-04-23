@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   User,
@@ -16,11 +16,10 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../utils/supabase';
+import { supabase } from '../utils/supabase.ts';
 
 type UserRole = 'admin' | 'owner' | 'provider' | 'support' | 'supervisor';
-
-type ProfileDetailTable = 'ctadmin' | 'ctchuxe' | 'ctnhacungcap' | 'ctnhanvien';
+type ProfileDetailTable = 'ctadmin' | 'ctchuxe' | 'ctnhacungcap';
 
 interface BaseProfile {
   manguoidung: string;
@@ -44,7 +43,7 @@ interface DetailConfig {
   hasPhone: boolean;
 }
 
-const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+const gmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const getRoleMeta = (role: UserRole) => {
   switch (role) {
@@ -54,15 +53,13 @@ const getRoleMeta = (role: UserRole) => {
         icon: Shield,
         gradient: 'from-rose-600 to-pink-600',
         soft: 'bg-rose-50 border-rose-200',
-        accent: 'rose',
       };
     case 'owner':
       return {
-        label: 'Chủ xe',
+        label: 'Người dùng',
         icon: Truck,
         gradient: 'from-blue-600 to-indigo-600',
         soft: 'bg-blue-50 border-blue-200',
-        accent: 'blue',
       };
     case 'provider':
       return {
@@ -70,7 +67,6 @@ const getRoleMeta = (role: UserRole) => {
         icon: Store,
         gradient: 'from-amber-600 to-orange-600',
         soft: 'bg-amber-50 border-amber-200',
-        accent: 'amber',
       };
     case 'support':
       return {
@@ -78,7 +74,6 @@ const getRoleMeta = (role: UserRole) => {
         icon: UserRound,
         gradient: 'from-pink-600 to-rose-600',
         soft: 'bg-pink-50 border-pink-200',
-        accent: 'pink',
       };
     case 'supervisor':
     default:
@@ -87,7 +82,6 @@ const getRoleMeta = (role: UserRole) => {
         icon: Building2,
         gradient: 'from-emerald-600 to-teal-600',
         soft: 'bg-emerald-50 border-emerald-200',
-        accent: 'emerald',
       };
   }
 };
@@ -96,14 +90,13 @@ const getDetailConfig = (role: UserRole): DetailConfig => {
   switch (role) {
     case 'admin':
       return { table: 'ctadmin', hasAddress: true, hasPhone: true };
-    case 'owner':
-      return { table: 'ctchuxe', hasAddress: true, hasPhone: true };
     case 'provider':
       return { table: 'ctnhacungcap', hasAddress: true, hasPhone: true };
+    case 'owner':
     case 'support':
     case 'supervisor':
     default:
-      return { table: 'ctnhanvien', hasAddress: false, hasPhone: true };
+      return { table: 'ctchuxe', hasAddress: true, hasPhone: true };
   }
 };
 
@@ -125,13 +118,17 @@ export const Profile = () => {
 
   const [showPinModal, setShowPinModal] = useState(false);
   const [showPinValue, setShowPinValue] = useState(false);
-  const [pinAction, setPinAction] = useState<'verify' | 'create' | 'change'>('verify');
+  const [pinAction, setPinAction] = useState<'verify' | 'create' | 'change' | 'roleBack'>('verify');
   const [currentPinInput, setCurrentPinInput] = useState('');
   const [newPinInput, setNewPinInput] = useState('');
   const [confirmPinInput, setConfirmPinInput] = useState('');
 
   const roleMeta = useMemo(() => getRoleMeta(profile?.chucnang || 'owner'), [profile?.chucnang]);
   const detailConfig = useMemo(() => getDetailConfig(profile?.chucnang || 'owner'), [profile?.chucnang]);
+
+  const isEmployeeRole = profile?.chucnang === 'support' || profile?.chucnang === 'supervisor';
+  const roleBackTarget = profile?.chucnang === 'supervisor' ? '/supervisor' : '/support';
+  const roleBackLabel = profile?.chucnang === 'supervisor' ? 'giám sát viên' : 'nhân viên hỗ trợ';
 
   const formatAvatarUrl = (value: string | null | undefined) => {
     if (!value) return '';
@@ -233,6 +230,18 @@ export const Profile = () => {
     setShowPinModal(true);
   };
 
+  const handleGoBackToRolePage = () => {
+    if (!profile) return;
+
+    if (!profile.mapinnguoidung?.trim()) {
+      toast.error('Tài khoản chưa tạo mã PIN, hãy tạo mới trước');
+      return;
+    }
+
+    setPinAction('roleBack');
+    setShowPinModal(true);
+  };
+
   const handleConfirmPin = async () => {
     if (!profile) return;
 
@@ -258,6 +267,23 @@ export const Profile = () => {
       toast.success('Xác thực thành công');
       setEditing(true);
       resetPinModal();
+      return;
+    }
+
+    if (pinAction === 'roleBack') {
+      if (currentPinInput.length !== 8) {
+        toast.error('Mã PIN phải có 8 chữ số');
+        return;
+      }
+
+      if (currentPinInput !== storedPin) {
+        toast.error('Mã PIN không đúng');
+        return;
+      }
+
+      toast.success('Xác thực thành công');
+      resetPinModal();
+      navigate(roleBackTarget);
       return;
     }
 
@@ -353,7 +379,7 @@ export const Profile = () => {
     }
 
     if (!validateEmail(email)) {
-      toast.error('Email phải đúng định dạng @gmail.com');
+      toast.error('Email phải đúng định dạng ví dụ: user@domain.com');
       return;
     }
 
@@ -438,17 +464,19 @@ export const Profile = () => {
       const { data: publicData } = supabase.storage.from('avatars').getPublicUrl(filePath);
       const publicUrl = publicData.publicUrl;
 
+      const avatarPayload: Record<string, string> = {
+        manguoidung: profile.manguoidung,
+        sodt: profile.sodt,
+        anhdaidien: publicUrl,
+      };
+
+      if (detailConfig.hasAddress) {
+        avatarPayload.diachi = profile.diachi || '';
+      }
+
       const { error: detailError } = await supabase
         .from(detailConfig.table)
-        .upsert(
-          {
-            manguoidung: profile.manguoidung,
-            sodt: profile.sodt,
-            diachi: profile.diachi,
-            anhdaidien: publicUrl,
-          },
-          { onConflict: 'manguoidung' }
-        );
+        .upsert(avatarPayload, { onConflict: 'manguoidung' });
 
       if (detailError) {
         console.error('SAVE AVATAR ERROR:', detailError);
@@ -503,6 +531,16 @@ export const Profile = () => {
                 {roleMeta.label} • thông tin tài khoản và chi tiết hồ sơ
               </p>
             </div>
+
+            {isEmployeeRole && (
+              <button
+                onClick={handleGoBackToRolePage}
+                className="bg-white/15 text-white px-5 py-3 rounded-xl font-semibold hover:bg-white/20 hover:shadow-lg transition flex items-center gap-2"
+              >
+                <Building2 className="w-5 h-5" />
+                Về trang {roleBackLabel}
+              </button>
+            )}
 
             <button
               onClick={unlockEdit}
@@ -593,7 +631,7 @@ export const Profile = () => {
               </div>
 
               <div className="text-sm text-gray-600 mb-4">
-                PIN này được dùng để mở khóa chỉnh sửa hồ sơ.
+                PIN này được dùng để mở khóa chỉnh sửa hồ sơ và quay về trang quản lý tương ứng.
               </div>
 
               <div className="flex items-center gap-3">
@@ -644,10 +682,10 @@ export const Profile = () => {
                 value={editEmail}
                 onChange={(e) => setEditEmail(e.target.value)}
                 className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-gray-50 disabled:bg-gray-100 focus:ring-2 focus:ring-pink-500 outline-none"
-                placeholder="name@gmail.com"
+                placeholder="name@domain.com"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Bắt buộc đúng định dạng <span className="font-semibold">@gmail.com</span>
+                Bắt buộc đúng định dạng <span className="font-semibold">user@domain.com</span>
               </p>
             </div>
 
@@ -740,7 +778,9 @@ export const Profile = () => {
                   ? 'Vui lòng nhập mã PIN người dùng'
                   : pinAction === 'create'
                     ? 'Tạo mã PIN người dùng'
-                    : 'Đổi mã PIN người dùng'}
+                    : pinAction === 'change'
+                      ? 'Đổi mã PIN người dùng'
+                      : `Nhập mã PIN để quay về trang ${roleBackLabel}`}
               </h2>
               <button onClick={resetPinModal} className="p-2 rounded-lg hover:bg-gray-100">
                 ✕
@@ -760,7 +800,7 @@ export const Profile = () => {
                       onChange={(e) => setCurrentPinInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
                       maxLength={8}
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-pink-500 outline-none font-mono tracking-widest text-center"
-                      placeholder="12345678"
+                      placeholder=""
                     />
                     <button
                       type="button"
@@ -776,16 +816,14 @@ export const Profile = () => {
               {(pinAction === 'create' || pinAction === 'change') && (
                 <>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      PIN mới
-                    </label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">PIN mới</label>
                     <input
                       type="password"
                       value={newPinInput}
                       onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
                       maxLength={8}
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-pink-500 outline-none font-mono tracking-widest text-center"
-                      placeholder="12345678"
+                      placeholder={showPinValue ? '' : '••••••••'}
                     />
                   </div>
 
@@ -799,7 +837,7 @@ export const Profile = () => {
                       onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
                       maxLength={8}
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-pink-500 outline-none font-mono tracking-widest text-center"
-                      placeholder="12345678"
+                      placeholder={showPinValue ? '' : '••••••••'}
                     />
                   </div>
                 </>
@@ -814,6 +852,12 @@ export const Profile = () => {
               {pinAction === 'change' && (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
                   Đổi PIN sẽ cần PIN cũ để xác thực trước.
+                </div>
+              )}
+
+              {pinAction === 'roleBack' && (
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                  Xác thực PIN để quay về trang {roleBackLabel}.
                 </div>
               )}
             </div>
@@ -833,7 +877,9 @@ export const Profile = () => {
                   ? 'Xác thực'
                   : pinAction === 'create'
                     ? 'Tạo PIN'
-                    : 'Đổi PIN'}
+                    : pinAction === 'change'
+                      ? 'Đổi PIN'
+                      : 'Xác thực và chuyển'}
               </button>
             </div>
           </div>

@@ -1,4 +1,4 @@
-import { useRouteError, useNavigate } from 'react-router';
+import { useRouteError, useNavigate } from 'react-router-dom';
 import { AlertTriangle, Home, ArrowLeft } from 'lucide-react';
 
 export const ErrorBoundary = () => {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Shield, Users, UserCheck, HeadphonesIcon, 
   Search, Filter, Edit, Trash2, Lock, Unlock
@@ -126,7 +126,7 @@ export const AccountManagement = () => {
       case 'support':
         return { name: 'Hỗ trợ', icon: HeadphonesIcon, color: 'green', bgColor: 'bg-green-100', textColor: 'text-green-700' };
       case 'owner':
-        return { name: 'Chủ xe', icon: Users, color: 'orange', bgColor: 'bg-orange-100', textColor: 'text-orange-700' };
+        return { name: 'Người dùng', icon: Users, color: 'orange', bgColor: 'bg-orange-100', textColor: 'text-orange-700' };
       default:
         return { name: role, icon: Users, color: 'gray', bgColor: 'bg-gray-100', textColor: 'text-gray-700' };
     }
@@ -188,7 +188,7 @@ export const AccountManagement = () => {
                 <Users className="w-8 h-8" />
                 Quản lý tài khoản
               </h1>
-              <p className="text-indigo-100 text-sm">Quản lý Admin, Chủ xe, Giám sát, Hỗ trợ</p>
+              <p className="text-indigo-100 text-sm">Quản lý Admin, Người dùng, Giám sát, Hỗ trợ</p>
             </div>
           </div>
         </div>
@@ -239,7 +239,7 @@ export const AccountManagement = () => {
 
           <div className="bg-white p-6 rounded-2xl shadow-lg border-2 border-orange-200">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-gray-600 text-sm font-semibold">Chủ xe</div>
+              <div className="text-gray-600 text-sm font-semibold">Người dùng</div>
               <div className="bg-orange-100 p-3 rounded-xl">
                 <Users className="w-6 h-6 text-orange-600" />
               </div>
@@ -273,7 +273,7 @@ export const AccountManagement = () => {
                 <option value="admin">Admin</option>
                 <option value="supervisor">Giám sát</option>
                 <option value="support">Hỗ trợ</option>
-                <option value="owner">Chủ xe</option>
+                <option value="owner">Người dùng</option>
               </select>
             </div>
 
@@ -426,7 +426,7 @@ export const AccountManagement = () => {
                 <option value="admin">Admin</option>
                 <option value="supervisor">Giám sát</option>
                 <option value="support">Hỗ trợ</option>
-                <option value="owner">Chủ xe</option>
+                <option value="owner">Người dùng</option>
               </select>
             </div>
 

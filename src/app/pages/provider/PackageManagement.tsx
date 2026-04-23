@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Package, Edit, Save, X } from 'lucide-react';
 import { toast } from 'sonner';
 

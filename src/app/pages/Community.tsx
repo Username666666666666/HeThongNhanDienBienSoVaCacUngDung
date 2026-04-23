@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Search, Key, Info, MapPin, Star, LogOut, AlertTriangle, Map
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { ParkingLot } from '../types/community';
-import { useAuth } from '../context/AuthContext';
-import { getHomeRoute, shouldSkipCommunityCodeEntry } from '../utils/navigation';
+import type { ParkingLot } from '../types/community.ts';
+import { useAuth } from '../context/AuthContext.tsx';
+import { getHomeRoute, shouldSkipCommunityCodeEntry } from '../utils/navigation.ts';
 
 
 export interface SupportTicket {

@@ -1,7 +1,7 @@
-import { RouterProvider } from "react-router";
-import { router } from "./routes";
+import { RouterProvider } from "react-router-dom";
+import { router } from "./routes.tsx";
 import { Toaster } from "sonner";
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider } from "./context/AuthContext.tsx";
 
 function App() {
   return (

@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router';
-import { supabase } from '../../utils/supabase';
+import { useNavigate } from 'react-router-dom';
+import { supabase } from '../../utils/supabase.ts';
 import {
   Car, MapPin, MessageSquare, User, Plus, List, Bell,
   Coins, AlertTriangle, Clock, TrendingUp, Wallet, Map,
   PlusCircle
 } from 'lucide-react';
-import { mockVehicles, mockParkingSessions, mockTransactions } from '../../store/mockData';
+import { mockVehicles, mockParkingSessions, mockTransactions } from '../../store/mockData.ts';
 interface OwnerDetails {
   xuao: number;
   anhdaidien: string | null;
@@ -113,6 +113,14 @@ const fetchOwnerData = async () => {
   }
 };
 
+useEffect(() => {
+  const message = sessionStorage.getItem('toast_message');
+  if (message) {
+    toast.success(message); // Hiển thị thông báo
+    sessionStorage.removeItem('toast_message'); // Xóa ngay để không hiện lại khi F5
+  }
+}, []);
+
 const fetchNotifications = async () => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
@@ -176,8 +184,8 @@ const sendResponseToAdmin = async (
     loai: 'role_request_response',
     tieude:
       status === 'accepted'
-        ? `Chủ xe đã xác nhận: ${payload.customName}`
-        : `Chủ xe đã từ chối: ${payload.customName}`,
+        ? `Người dùng đã xác nhận: ${payload.customName}`
+        : `Người dùng đã từ chối: ${payload.customName}`,
     noidung: JSON.stringify({
       action: 'staff_invite_response',
       status,
@@ -191,6 +199,26 @@ const sendResponseToAdmin = async (
     dadoc: false
   });
 };
+const normalizeCodeNumber = (code: string | null | undefined) => {
+  if (!code) return 0;
+  const match = code.match(/^NV(\d+)$/i);
+  if (!match) return 0;
+  return Number(match[1]) || 0;
+};
+const generateNextStaffCode = async (adminId: string) => {
+  const { data, error } = await supabase
+    .from('ctnhanvien')
+    .select('manhanvien')
+    .eq('maadmin', adminId);
+
+  if (error) throw error;
+
+  const maxNum = (data ?? []).reduce((max, row: any) => {
+    return Math.max(max, normalizeCodeNumber(row.manhanvien));
+  }, 0);
+
+  return `NV${String(maxNum + 1).padStart(4, '0')}`;
+};
 
 const upsertStaffRecord = async (
   userId: string,
@@ -199,7 +227,7 @@ const upsertStaffRecord = async (
 ) => {
   const { data: existingStaff, error: existingError } = await supabase
     .from('ctnhanvien')
-    .select('manguoidung, maadmin')
+    .select('manguoidung, maadmin, manhanvien, nghiviec')
     .eq('manguoidung', userId)
     .maybeSingle();
 
@@ -209,11 +237,19 @@ const upsertStaffRecord = async (
     throw new Error('Người dùng đang thuộc hệ thống khác');
   }
 
+  const nextCode = existingStaff?.manhanvien || (await generateNextStaffCode(adminId));
+
   const staffData = {
     manguoidung: userId,
     mabaido: payload.parkingLotId,
     maadmin: adminId,
-    duocchuyenbai: payload.canSwitchLots
+    duocchuyenbai: payload.canSwitchLots,
+    ngayvaolam: new Date().toISOString(),
+    hoten: payload.customName,
+    manhanvien: nextCode,
+    nghiviec: false,
+    sodt: null,
+    anhdaidien: null,
   };
 
   if (existingStaff) {
@@ -230,6 +266,8 @@ const upsertStaffRecord = async (
 
     if (error) throw error;
   }
+
+  return nextCode;
 };
 
 const handleAccept = async () => {
@@ -239,17 +277,16 @@ const handleAccept = async () => {
   try {
     const payload = selectedRequest.payload;
 
-    await upsertStaffRecord(user.id, selectedRequest.manguoigui, payload);
+    const staffCode = await upsertStaffRecord(user.id, selectedRequest.manguoigui, payload);
 
-const { error: updateUserError } = await supabase
-  .from('nguoidung')
-  .update({
-    chucnang: payload.targetRole,
-    tennguoidung: payload.customName // ✅ đổi tên tại đây
-  })
-  .eq('manguoidung', user.id);
+    const { error: updateUserError } = await supabase
+      .from('nguoidung')
+      .update({
+        chucnang: payload.targetRole,
+      })
+      .eq('manguoidung', user.id);
 
-if (updateUserError) throw updateUserError;
+    if (updateUserError) throw updateUserError;
 
     await sendResponseToAdmin(selectedRequest.manguoigui, 'accepted', payload);
 
@@ -257,14 +294,13 @@ if (updateUserError) throw updateUserError;
     await fetchNotifications();
     await fetchOwnerData();
 
-    toast.success('Đã xác nhận trở thành nhân viên');
-    window.location.reload();
+    toast.success(`Đã xác nhận trở thành nhân viên với mã ${staffCode}`);
+    globalThis.location.reload();
   } catch (error: any) {
     console.error('ACCEPT ERROR:', error);
     toast.error(error?.message || 'Xác nhận thất bại');
   }
 };
-
 const handleReject = async () => {
   if (!selectedRequest?.payload) return;
 
@@ -313,7 +349,7 @@ useEffect(() => {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl mb-2 tracking-tight">
-                Xin chào, {ownerDetails?.nguoidung?.tennguoidung || 'Chủ xe'}
+                Xin chào, {ownerDetails?.nguoidung?.tennguoidung || 'Người dùng'}
               </h1>
               <p className="text-blue-100 text-sm">Quản lý phương tiện của bạn</p>
             </div>
@@ -382,7 +418,7 @@ useEffect(() => {
                       <div className="text-xs text-gray-600 leading-5">
                         {n.payload ? (
                           <div className="space-y-1">
-                            <div><strong>Chủ xe:</strong> {n.payload.customName}</div>
+                            <div><strong>Người dùng:</strong> {n.payload.customName}</div>
                             <div><strong>Bãi đỗ:</strong> {n.payload.parkingLotName}</div>
                             <div><strong>Mã tham gia:</strong> {n.payload.parkingLotJoinCode}</div>
                             <div><strong>Chức vụ:</strong> {n.payload.targetRole === 'supervisor' ? 'Giám sát viên' : 'Nhân viên hỗ trợ'}</div>
@@ -707,7 +743,7 @@ useEffect(() => {
       <div className="p-5 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
         <h2 className="text-xl font-bold">Xác nhận lời mời</h2>
         <p className="text-sm text-white/80 mt-1">
-          Chủ xe sắp được chuyển thành nhân viên
+          Người dùng sắp được chuyển thành nhân viên
         </p>
       </div>
 

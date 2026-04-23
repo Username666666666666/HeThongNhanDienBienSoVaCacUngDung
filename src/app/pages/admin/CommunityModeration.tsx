@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, CheckCircle, XCircle, MessageSquare,
   AlertTriangle, Users, UserX, Shield, Eye,
   Clock, Filter, Search
 } from 'lucide-react';
 import { toast } from 'sonner';
-import type { CommunityPost, SupportTicket, CommunityMember } from '../../types/community';
+import type { CommunityPost, SupportTicket, CommunityMember } from '../../types/community.ts';
 
 export const CommunityModeration = () => {
   const navigate = useNavigate();

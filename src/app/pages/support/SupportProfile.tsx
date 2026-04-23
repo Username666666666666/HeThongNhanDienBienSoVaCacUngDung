@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
   User,
@@ -17,12 +17,12 @@ import {
   EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../../utils/supabase';
+import { supabase } from '../../utils/supabase.ts';
 
 interface SupportProfileData {
   manguoidung: string;
   email: string;
-  tennguoidung: string;
+  hoten: string;
   sodt: string;
   anhdaidien: string;
   mabaido: string | null;
@@ -30,6 +30,9 @@ interface SupportProfileData {
   duocchuyenbai: boolean;
   ngayvaolam: string | null;
   mapinnguoidung: string | null;
+  chucnang: string | null;
+  manhanvien: string | null;
+  nghiviec: boolean | null;
 }
 
 interface ParkingLot {
@@ -39,7 +42,7 @@ interface ParkingLot {
   address: string | null;
 }
 
-const gmailRegex = /^[a-zA-Z0-9._%+-]+@gmail\.com$/;
+const gmailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const SupportProfile = () => {
   const navigate = useNavigate();
@@ -54,7 +57,6 @@ export const SupportProfile = () => {
   const [selectedLot, setSelectedLot] = useState('');
   const [adminPin, setAdminPin] = useState('');
 
-  const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [avatarPreview, setAvatarPreview] = useState('');
@@ -62,11 +64,11 @@ export const SupportProfile = () => {
   const [editing, setEditing] = useState(false);
 
   const [showPinModal, setShowPinModal] = useState(false);
-  const [showPinValue, setShowPinValue] = useState(false);
-  const [pinAction, setPinAction] = useState<'verify' | 'create' | 'change'>('verify');
+  const [pinAction, setPinAction] = useState<'verify' | 'create' | 'change' | 'roleBack'>('verify');
   const [currentPinInput, setCurrentPinInput] = useState('');
   const [newPinInput, setNewPinInput] = useState('');
   const [confirmPinInput, setConfirmPinInput] = useState('');
+  const [showPinValue, setShowPinValue] = useState(false);
 
   const currentLot = useMemo(() => {
     return availableLots.find((lot) => lot.code === profile?.mabaido) || null;
@@ -118,7 +120,7 @@ export const SupportProfile = () => {
 
       const { data: userRow, error: userError } = await supabase
         .from('nguoidung')
-        .select('manguoidung, email, tennguoidung, mapinnguoidung')
+        .select('manguoidung, email, tennguoidung, chucnang, mapinnguoidung')
         .eq('manguoidung', user.id)
         .maybeSingle();
 
@@ -130,7 +132,9 @@ export const SupportProfile = () => {
 
       const { data: staffRow, error: staffError } = await supabase
         .from('ctnhanvien')
-        .select('manguoidung, sodt, anhdaidien, mabaido, maadmin, duocchuyenbai, ngayvaolam')
+        .select(
+          'manguoidung, sodt, anhdaidien, mabaido, maadmin, duocchuyenbai, ngayvaolam, hoten, manhanvien, nghiviec'
+        )
         .eq('manguoidung', user.id)
         .maybeSingle();
 
@@ -143,7 +147,7 @@ export const SupportProfile = () => {
       const mergedProfile: SupportProfileData = {
         manguoidung: user.id,
         email: userRow?.email || user.email || '',
-        tennguoidung: userRow?.tennguoidung || '',
+        hoten: staffRow?.hoten || userRow?.tennguoidung || '',
         sodt: staffRow?.sodt || '',
         anhdaidien: staffRow?.anhdaidien || '',
         mabaido: staffRow?.mabaido || null,
@@ -151,10 +155,12 @@ export const SupportProfile = () => {
         duocchuyenbai: staffRow?.duocchuyenbai ?? false,
         ngayvaolam: staffRow?.ngayvaolam || null,
         mapinnguoidung: userRow?.mapinnguoidung || null,
+        chucnang: userRow?.chucnang || null,
+        manhanvien: staffRow?.manhanvien || null,
+        nghiviec: staffRow?.nghiviec ?? null,
       };
 
       setProfile(mergedProfile);
-      setEditName(mergedProfile.tennguoidung);
       setEditEmail(mergedProfile.email);
       setEditPhone(mergedProfile.sodt);
       setAvatarPreview(getAvatarUrl(mergedProfile.anhdaidien));
@@ -192,19 +198,31 @@ export const SupportProfile = () => {
 
   const openEditFlow = () => {
     if (!profile) return;
-
-    if (profile.mapinnguoidung) {
-      setPinAction('verify');
-    } else {
-      setPinAction('create');
-    }
-
+    setPinAction(profile.mapinnguoidung ? 'verify' : 'create');
     setShowPinModal(true);
+    setShowPinValue(false);
+    setCurrentPinInput('');
+    setNewPinInput('');
+    setConfirmPinInput('');
   };
 
   const openChangePin = () => {
     setPinAction(profile?.mapinnguoidung ? 'change' : 'create');
     setShowPinModal(true);
+    setShowPinValue(false);
+    setCurrentPinInput('');
+    setNewPinInput('');
+    setConfirmPinInput('');
+  };
+
+  const openRoleBackFlow = () => {
+    if (!profile) return;
+    setPinAction('roleBack');
+    setShowPinModal(true);
+    setShowPinValue(false);
+    setCurrentPinInput('');
+    setNewPinInput('');
+    setConfirmPinInput('');
   };
 
   const handlePinConfirm = async () => {
@@ -304,20 +322,37 @@ export const SupportProfile = () => {
       setProfile((prev) => (prev ? { ...prev, mapinnguoidung: newPinInput } : prev));
       toast.success('Đã đổi mã PIN');
       resetPinModal();
+      return;
+    }
+
+    if (pinAction === 'roleBack') {
+      if (!storedPin) {
+        toast.error('Tài khoản chưa có mã PIN, hãy tạo PIN trước');
+        return;
+      }
+
+      if (currentPinInput.length !== 8) {
+        toast.error('Mã PIN phải có 8 chữ số');
+        return;
+      }
+
+      if (currentPinInput !== storedPin) {
+        toast.error('Mã PIN không đúng');
+        return;
+      }
+
+      toast.success('Xác thực thành công');
+      resetPinModal();
+      navigate('/owner');
+      return;
     }
   };
 
   const handleSaveProfile = async () => {
     if (!profile) return;
 
-    const name = editName.trim();
     const email = editEmail.trim();
     const phone = editPhone.trim();
-
-    if (!name) {
-      toast.error('Tên người dùng không được để trống');
-      return;
-    }
 
     if (!email) {
       toast.error('Email không được để trống');
@@ -325,7 +360,7 @@ export const SupportProfile = () => {
     }
 
     if (!validateEmail(email)) {
-      toast.error('Email phải đúng định dạng @gmail.com');
+      toast.error('Email phải đúng định dạng ví dụ: user@domain.com');
       return;
     }
 
@@ -334,7 +369,6 @@ export const SupportProfile = () => {
       const { error: userError } = await supabase
         .from('nguoidung')
         .update({
-          tennguoidung: name,
           email,
         })
         .eq('manguoidung', profile.manguoidung);
@@ -362,7 +396,6 @@ export const SupportProfile = () => {
         prev
           ? {
               ...prev,
-              tennguoidung: name,
               email,
               sodt: phone,
             }
@@ -513,13 +546,25 @@ export const SupportProfile = () => {
             >
               <ArrowLeft className="w-6 h-6" />
             </button>
+
             <div className="flex-1">
               <h1 className="text-3xl mb-1 flex items-center gap-3">
                 <User className="w-8 h-8" />
                 Hồ sơ hỗ trợ
               </h1>
-              <p className="text-pink-100 text-sm">Thông tin tài khoản và bãi đỗ được phân quyền</p>
+              <p className="text-pink-100 text-sm">
+                Thông tin tài khoản và bãi đỗ được phân quyền
+              </p>
             </div>
+
+            <button
+              onClick={openRoleBackFlow}
+              className="bg-white/10 text-white px-5 py-3 rounded-xl font-semibold hover:bg-white/20 transition flex items-center gap-2"
+            >
+              <User className="w-5 h-5" />
+              Về trang người dùng
+            </button>
+
             <button
               onClick={handleLogout}
               className="bg-white text-pink-700 px-5 py-3 rounded-xl font-semibold hover:shadow-lg transition flex items-center gap-2"
@@ -563,7 +608,7 @@ export const SupportProfile = () => {
             <div className="flex-1">
               <div className="flex items-center gap-3 flex-wrap mb-2">
                 <h2 className="text-3xl font-bold text-gray-900">
-                  {profile?.tennguoidung?.trim() || 'Chưa có tên'}
+                  {profile?.hoten?.trim() || 'Chưa có tên'}
                 </h2>
                 <span className="px-3 py-1 rounded-full text-sm bg-pink-50 border border-pink-200 text-pink-700">
                   Nhân viên hỗ trợ
@@ -583,7 +628,7 @@ export const SupportProfile = () => {
                 </div>
                 <div>
                   🆔 Mã nhân viên:{' '}
-                  <span className="font-semibold font-mono">{profile?.manguoidung || 'Chưa có'}</span>
+                  <span className="font-semibold font-mono">{profile?.manhanvien || 'Chưa có'}</span>
                 </div>
               </div>
             </div>
@@ -645,14 +690,16 @@ export const SupportProfile = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Tên người dùng</label>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Tên nhân viên
+              </label>
               <input
-                disabled={!editing}
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 disabled:bg-gray-100 focus:ring-2 focus:ring-pink-500 outline-none"
-                placeholder="Nhập tên người dùng"
+                disabled
+                value={profile?.hoten || ''}
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-100 text-gray-600 outline-none"
+                placeholder="Tên nhân viên"
               />
+              <p className="text-xs text-gray-500 mt-1">Tên này lấy từ bảng ctnhanvien và không sửa được.</p>
             </div>
 
             <div>
@@ -662,10 +709,10 @@ export const SupportProfile = () => {
                 value={editEmail}
                 onChange={(e) => setEditEmail(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-xl bg-gray-50 disabled:bg-gray-100 focus:ring-2 focus:ring-pink-500 outline-none"
-                placeholder="name@gmail.com"
+                placeholder="user@domain.com"
               />
               <p className="text-xs text-gray-500 mt-1">
-                Bắt buộc đúng định dạng <span className="font-semibold">@gmail.com</span>
+                Bắt buộc đúng định dạng <span className="font-semibold">user@domain.com</span>
               </p>
             </div>
 
@@ -688,7 +735,6 @@ export const SupportProfile = () => {
                   onClick={() => {
                     setEditing(false);
                     if (profile) {
-                      setEditName(profile.tennguoidung);
                       setEditEmail(profile.email);
                       setEditPhone(profile.sodt);
                     }
@@ -803,8 +849,11 @@ export const SupportProfile = () => {
                   type="password"
                   value={adminPin}
                   onChange={(e) => setAdminPin(e.target.value.replace(/\D/g, '').slice(0, 8))}
-                  placeholder="12345678"
+                  placeholder=""
                   maxLength={8}
+                  autoComplete="new-password"
+                  name="admin-pin-support"
+                  inputMode="numeric"
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:ring-2 focus:ring-pink-500 focus:border-pink-500 outline-none transition text-center text-2xl tracking-widest font-bold"
                 />
                 <div className="text-xs text-gray-500 text-center mt-2">
@@ -842,10 +891,12 @@ export const SupportProfile = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-bold text-gray-900">
                 {pinAction === 'verify'
-                  ? 'Vui lòng nhập mã pin người dùng'
+                  ? 'Vui lòng nhập mã PIN người dùng'
                   : pinAction === 'create'
-                    ? 'Tạo mã pin người dùng'
-                    : 'Đổi mã pin người dùng'}
+                    ? 'Tạo mã PIN người dùng'
+                    : pinAction === 'change'
+                      ? 'Đổi mã PIN người dùng'
+                      : 'Xác thực để chuyển về trang người dùng'}
               </h2>
               <button onClick={resetPinModal} className="p-2 rounded-lg hover:bg-gray-100">
                 ✕
@@ -862,10 +913,15 @@ export const SupportProfile = () => {
                     <input
                       type={showPinValue ? 'text' : 'password'}
                       value={currentPinInput}
-                      onChange={(e) => setCurrentPinInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                      onChange={(e) =>
+                        setCurrentPinInput(e.target.value.replace(/\D/g, '').slice(0, 8))
+                      }
                       maxLength={8}
+                      autoComplete="new-password"
+                      name="current-pin-support"
+                      inputMode="numeric"
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-pink-500 outline-none font-mono tracking-widest text-center"
-                      placeholder="12345678"
+                      placeholder={showPinValue ? '' : '••••••••'}
                     />
                     <button
                       type="button"
@@ -881,16 +937,19 @@ export const SupportProfile = () => {
               {(pinAction === 'create' || pinAction === 'change') && (
                 <>
                   <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">
-                      PIN mới
-                    </label>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">PIN mới</label>
                     <input
                       type="password"
                       value={newPinInput}
-                      onChange={(e) => setNewPinInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                      onChange={(e) =>
+                        setNewPinInput(e.target.value.replace(/\D/g, '').slice(0, 8))
+                      }
                       maxLength={8}
+                      autoComplete="new-password"
+                      name="new-pin-support"
+                      inputMode="numeric"
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-pink-500 outline-none font-mono tracking-widest text-center"
-                      placeholder="12345678"
+                      placeholder="••••••••"
                     />
                   </div>
 
@@ -901,10 +960,15 @@ export const SupportProfile = () => {
                     <input
                       type="password"
                       value={confirmPinInput}
-                      onChange={(e) => setConfirmPinInput(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                      onChange={(e) =>
+                        setConfirmPinInput(e.target.value.replace(/\D/g, '').slice(0, 8))
+                      }
                       maxLength={8}
+                      autoComplete="new-password"
+                      name="confirm-pin-support"
+                      inputMode="numeric"
                       className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-pink-500 outline-none font-mono tracking-widest text-center"
-                      placeholder="12345678"
+                      placeholder="••••••••"
                     />
                   </div>
                 </>
@@ -921,6 +985,12 @@ export const SupportProfile = () => {
                   Đổi PIN sẽ cần PIN cũ để xác thực trước.
                 </div>
               )}
+
+              {pinAction === 'roleBack' && (
+                <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-800">
+                  Nhập PIN để quay lại trang nhân viên hỗ trợ.
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">
@@ -934,7 +1004,13 @@ export const SupportProfile = () => {
                 onClick={handlePinConfirm}
                 className="flex-1 px-5 py-3 rounded-xl bg-gradient-to-r from-pink-600 to-rose-600 text-white font-semibold hover:shadow-lg transition"
               >
-                {pinAction === 'verify' ? 'Xác thực' : pinAction === 'create' ? 'Tạo PIN' : 'Đổi PIN'}
+                {pinAction === 'verify'
+                  ? 'Xác thực'
+                  : pinAction === 'create'
+                    ? 'Tạo PIN'
+                    : pinAction === 'change'
+                      ? 'Đổi PIN'
+                      : 'Chuyển trang'}
               </button>
             </div>
           </div>

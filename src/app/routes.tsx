@@ -1,74 +1,77 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { ReactNode } from "react";
 
-import { Login } from "./pages/Login";
-import { ForgotPassword } from "./pages/ForgotPassword";
-import { Register } from "./pages/Register";
-import { NotFound } from "./pages/NotFound";
-import { ErrorBoundary } from "./pages/ErrorBoundary";
-import { Profile } from "./pages/Profile";
-import { Community } from "./pages/Community";
-import { InternalChatPage } from "./pages/shared/InternalChatPage";
+import { Login } from "./pages/Login.tsx";
+import { ForgotPassword } from "./pages/ForgotPassword.tsx";
+import { Register } from "./pages/Register.tsx";
+import { NotFound } from "./pages/NotFound.tsx";
+import { ErrorBoundary } from "./pages/ErrorBoundary.tsx";
+import { Profile } from "./pages/Profile.tsx";
+import { Community } from "./pages/Community.tsx";
+import { InternalChatPage } from "./pages/shared/InternalChatPage.tsx";
 
-import { OwnerDashboard } from "./pages/owner/OwnerDashboard";
-import { RegisterVehicle } from "./pages/owner/RegisterVehicle";
-import { BrowseParkingLots } from "./pages/owner/BrowseParkingLots";
-import { ParkingLotDetails } from "./pages/owner/ParkingLotDetails";
-import { ParkingZoneSelection } from "./pages/owner/ParkingZoneSelection";
-import { VehicleTypeSelection } from "./pages/owner/VehicleTypeSelection";
-import { SpotSelection } from "./pages/owner/SpotSelection";
-import { VehicleStatus } from "./pages/owner/VehicleStatus";
-import { ParkingRegistration } from "./pages/owner/ParkingRegistration";
-import { TopUpCoins } from "./pages/owner/TopUpCoins";
-import { VehicleEntryExitLog as OwnerVehicleEntryExitLog } from "./pages/owner/VehicleEntryExitLog";
+import { OwnerDashboard } from "./pages/owner/OwnerDashboard.tsx";
+import { RegisterVehicle } from "./pages/owner/RegisterVehicle.tsx";
+import { BrowseParkingLots } from "./pages/owner/BrowseParkingLots.tsx";
+import { ParkingLotDetails } from "./pages/owner/ParkingLotDetails.tsx";
+import { ParkingZoneSelection } from "./pages/owner/ParkingZoneSelection.tsx";
+import { VehicleTypeSelection } from "./pages/owner/VehicleTypeSelection.tsx";
+import { SpotSelection } from "./pages/owner/SpotSelection.tsx";
+import { VehicleStatus } from "./pages/owner/VehicleStatus.tsx";
+import { ParkingRegistration } from "./pages/owner/ParkingRegistration.tsx";
+import { TopUpCoins } from "./pages/owner/TopUpCoins.tsx";
+import { VehicleEntryExitLog as OwnerVehicleEntryExitLog } from "./pages/owner/VehicleEntryExitLog.tsx";
 
-import { SupervisorDashboard } from "./pages/supervisor/SupervisorDashboard";
-import { GateManagement } from "./pages/supervisor/GateManagement";
-import { DualGateMonitoring } from "./pages/supervisor/DualGateMonitoring";
-import { SuspiciousVehicles } from "./pages/supervisor/SuspiciousVehicles";
-import { SuspiciousHistory } from "./pages/supervisor/SuspiciousHistory";
-import { ShiftManagement } from "./pages/supervisor/ShiftManagement";
-import { VehicleEntryExitLog as SupervisorVehicleEntryExitLog } from "./pages/supervisor/VehicleEntryExitLog";
-import { SupervisorProfile } from "./pages/supervisor/SupervisorProfile";
+import { SupervisorDashboard } from "./pages/supervisor/SupervisorDashboard.tsx";
+import { GateManagement } from "./pages/supervisor/GateManagement.tsx";
+import { DualGateMonitoring } from "./pages/supervisor/DualGateMonitoring.tsx";
+import { SuspiciousVehicles } from "./pages/supervisor/SuspiciousVehicles.tsx";
+import { SuspiciousHistory } from "./pages/supervisor/SuspiciousHistory.tsx";
+import { ShiftManagement } from "./pages/supervisor/ShiftManagement.tsx";
+import { VehicleEntryExitLog as SupervisorVehicleEntryExitLog } from "./pages/supervisor/VehicleEntryExitLog.tsx";
+import { SupervisorProfile } from "./pages/supervisor/SupervisorProfile.tsx";
 
-import { SupportStaffDashboard } from "./pages/support/SupportStaffDashboard";
-import { SupportProfile } from './pages/support/SupportProfile';
+import { SupportStaffDashboard } from "./pages/support/SupportStaffDashboard.tsx";
+import { SupportProfile } from './pages/support/SupportProfile.tsx';
 
-import { AdminDashboard } from "./pages/admin/AdminDashboard";
-import { ParkingLotConfig } from "./pages/admin/ParkingLotConfig";
-import { Statistics } from "./pages/admin/Statistics";
-import { ServiceSubscription } from "./pages/admin/ServiceSubscription";
-import { CommunityModeration } from "./pages/admin/CommunityModeration";
-import { ShiftVideoLogs } from "./pages/admin/ShiftVideoLogs";
-import { StaffManagement } from "./pages/admin/StaffManagement";
-import { MyParkingLots } from "./pages/admin/MyParkingLots";
-import { ServiceRegistration } from "./pages/admin/ServiceRegistration";
-import { CameraManagement } from "./pages/admin/CameraManagement";
+import { AdminDashboard } from "./pages/admin/AdminDashboard.tsx";
+import { ParkingLotConfig } from "./pages/admin/ParkingLotConfig.tsx";
+import { Statistics } from "./pages/admin/Statistics.tsx";
+import { ServiceSubscription } from "./pages/admin/ServiceSubscription.tsx";
+import { CommunityModeration } from "./pages/admin/CommunityModeration.tsx";
+import { ShiftVideoLogs } from "./pages/admin/ShiftVideoLogs.tsx";
+import { StaffManagement } from "./pages/admin/StaffManagement.tsx";
+import { MyParkingLots } from "./pages/admin/MyParkingLots.tsx";
+import { ServiceRegistration } from "./pages/admin/ServiceRegistration.tsx";
+import { CameraManagement } from "./pages/admin/CameraManagement.tsx";
 
-import { ProviderDashboard } from "./pages/provider/ProviderDashboard";
-import { VirtualCoinSettings } from "./pages/provider/VirtualCoinSettings";
-import { ServiceManagement } from "./pages/provider/ServiceManagement";
-import { DeviceManagement } from "./pages/provider/DeviceManagement";
-import { AccountManagement } from "./pages/provider/AccountManagement";
-import { ProviderStatistics } from "./pages/provider/ProviderStatistics";
-import { SystemSettings } from "./pages/provider/SystemSettings";
-import { PackageManagement } from "./pages/provider/PackageManagement";
-import { MaintenanceSchedule } from "./pages/provider/MaintenanceSchedule";
+import { ProviderDashboard } from "./pages/provider/ProviderDashboard.tsx";
+import { VirtualCoinSettings } from "./pages/provider/VirtualCoinSettings.tsx";
+import { ServiceManagement } from "./pages/provider/ServiceManagement.tsx";
+import { DeviceManagement } from "./pages/provider/DeviceManagement.tsx";
+import { AccountManagement } from "./pages/provider/AccountManagement.tsx";
+import { ProviderStatistics } from "./pages/provider/ProviderStatistics.tsx";
+import { SystemSettings } from "./pages/provider/SystemSettings.tsx";
+import { PackageManagement } from "./pages/provider/PackageManagement.tsx";
+import { MaintenanceSchedule } from "./pages/provider/MaintenanceSchedule.tsx";
 
-import { CommunityFeed } from "./pages/community/CommunityFeed";
-import { ParkingReviews } from "./pages/community/ParkingReviews";
-import { TheftReportPage } from "./pages/community/TheftReportPage";
-import { SupportPage } from "./pages/community/SupportPage";
-import { CommunityChat } from "./pages/community/CommunityChat";
-import { CoinGames } from "./pages/community/CoinGames";
+import { CommunityFeed } from "./pages/community/CommunityFeed.tsx";
+import { ParkingReviews } from "./pages/community/ParkingReviews.tsx";
+import { TheftReportPage } from "./pages/community/TheftReportPage.tsx";
+import { SupportPage } from "./pages/community/SupportPage.tsx";
+import { CommunityChat } from "./pages/community/CommunityChat.tsx";
+import { CoinGames } from "./pages/community/CoinGames.tsx";
 
-import { ParkingLotEditPage, ParkingLotDetailsPage } from "./pages/admin/MyParkingLots";
+import { ParkingLotEditPage, ParkingLotDetailsPage } from "./pages/admin/MyParkingLots.tsx";
 
-import { ProtectedRoute } from "./components/ProtectedRoute";
-import { AuthCallback } from "./pages/AuthCallback";
+import { ProtectedRoute } from "./components/ProtectedRoute.tsx";
+import { AuthCallback } from "./pages/AuthCallback.tsx";
+import { ResetUserPin } from "./pages/owner/ResetUserPin.tsx";
+import { AdminPinSecurity } from "./pages/admin/AdminPinSecurity.tsx";
+
 
 const ALL_ROLES = ["owner", "supervisor", "admin", "provider", "support"];
-const OWNER_ROLES = ["owner"];
+const OWNER_ROLES = ["owner","supervisor","support"];
 const SUPERVISOR_ROLES = ["supervisor"];
 const SUPPORT_ROLES = ["support"];
 const ADMIN_ROLES = ["admin"];
@@ -194,6 +197,14 @@ export const router = createBrowserRouter([
     ),
     errorElement: <ErrorBoundary />,
   },
+{
+  path: "/reset-user-pin",
+  element: (
+  <Guard allowedRoles={ALL_ROLES}>
+  <ResetUserPin />
+  </Guard>
+  ),errorElement: <ErrorBoundary />,
+},
 
   // Owner
   {
@@ -391,6 +402,15 @@ export const router = createBrowserRouter([
   },
 
   // Admin
+  {
+  path: "/admin/pin-security",
+  element: (
+    <Guard allowedRoles={ADMIN_ROLES}>
+      <AdminPinSecurity />
+    </Guard>
+  ),
+  errorElement: <ErrorBoundary />,
+},
   {
     path: "/admin",
     element: (
