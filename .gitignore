@@ -8,19 +8,31 @@ build/
 # env
 .env
 .env.*
+.env.local
 
 # logs
 npm-debug.log*
 pnpm-debug.log*
 yarn-debug.log*
 
+# cache
+.vite/
+
 # OS
 .DS_Store
 Thumbs.db
 
 # IDE
-
+.vscode/
 .idea/
+*.code-workspace
 
 # misc
 *.local
+
+# vercel
+.vercel/
+
+# pnpm (không dùng)
+pnpm-lock.yaml
+pnpm-workspace.yaml
