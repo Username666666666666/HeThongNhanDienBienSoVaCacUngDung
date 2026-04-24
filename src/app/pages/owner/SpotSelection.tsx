@@ -520,98 +520,99 @@ const occupiedCount = visibleSpots.filter((s) => s.status === 1).length;
 const reservedCount = visibleSpots.filter((s) => s.status === 2).length;
 const unsupportedCount = visibleSpots.filter((s) => !s.supported).length;
 
-  const handleConfirm = async () => {
-    if (!parkingLot || !zone || !vehicle) return;
+const handleConfirm = async () => {
+  if (!parkingLot || !zone || !vehicle) return;
 
-    if (!selectedSpot) {
-      toast.error('Vui lòng chọn vị trí đỗ!');
+  if (!selectedSpot) {
+    toast.error('Vui lòng chọn vị trí đỗ!');
+    return;
+  }
+
+  if (!selectedSpotSupported) {
+    toast.error('Vị trí này không hỗ trợ loại xe của bạn.');
+    return;
+  }
+
+  if (!selectedSpotAvailable) {
+    toast.error('Vị trí này không còn trống.');
+    return;
+  }
+
+  if (!selectedPrice) {
+    toast.error('Khu vực này chưa có bảng giá phù hợp cho xe của bạn.');
+    return;
+  }
+
+  if (paymentMethod === 'coin') {
+    const requiredCoin = selectedPrice.coinPrice;
+
+    if (requiredCoin == null) {
+      toast.error('Loại thanh toán xu ảo chưa được cấu hình cho vị trí này.');
       return;
     }
 
-    if (!selectedSpotSupported) {
-      toast.error('Vị trí này không hỗ trợ loại xe của bạn.');
+    if ((coinBalance ?? 0) < requiredCoin) {
+      toast.error('Bạn không đủ xu ảo, đang chuyển đến trang nạp xu.');
+      globalThis.location.href = 'http://localhost:5176/owner/topup';
       return;
     }
+  }
 
-    if (!selectedSpotAvailable) {
-      toast.error('Vị trí này không còn trống.');
-      return;
+  try {
+    setSubmitting(true);
+
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const reservationId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
+
+    const insertPayload = {
+      mabang: reservationId,
+      manguoidung: vehicle.manguoidung,
+      maphuongtien:  vehicle.id, // thêm mã phương tiện vào đây
+      mabaido: parkingLot.mabaido,
+      makhuvuc: zone.makhuvuc,
+      mavitri: selectedSpot.mavitri,
+      loaithanhtoan: getPaymentLabel(paymentMethod),
+      thanhtien: selectedPrice.price,
+      ngayhethan: expiresAt,
+      trangthai: 'đã đặt chỗ',
+    };
+
+    const { error: insertError } = await supabase
+      .from('bangdatchotruoc')
+      .insert(insertPayload as any);
+
+    if (insertError) throw insertError;
+
+    const { error: updateSpotError } = await supabase
+      .from('vitrido')
+      .update({ trangthai: 2 })
+      .eq('mavitri', selectedSpot.mavitri)
+      .eq('makhuvuc', zone.makhuvuc)
+      .eq('mabanggia', selectedSpot.mabanggia ?? selectedPrice.mabanggia);
+
+    if (updateSpotError) throw updateSpotError;
+
+    if (paymentMethod === 'coin' && selectedPrice.coinPrice != null) {
+      const nextBalance = Number(coinBalance ?? 0) - Number(selectedPrice.coinPrice ?? 0);
+
+      const { error: balanceUpdateError } = await supabase
+        .from('ctchuxe')
+        .update({ xuao: nextBalance })
+        .eq('manguoidung', vehicle.manguoidung);
+
+      if (balanceUpdateError) throw balanceUpdateError;
     }
 
-    if (!selectedPrice) {
-      toast.error('Khu vực này chưa có bảng giá phù hợp cho xe của bạn.');
-      return;
-    }
+    toast.success('Đã đặt chỗ thành công!');
 
-    if (paymentMethod === 'coin') {
-      const requiredCoin = selectedPrice.coinPrice;
-
-      if (requiredCoin == null) {
-        toast.error('Loại thanh toán xu ảo chưa được cấu hình cho vị trí này.');
-        return;
-      }
-
-      if ((coinBalance ?? 0) < requiredCoin) {
-        toast.error('Bạn không đủ xu ảo, đang chuyển đến trang nạp xu.');
-        globalThis.location.href = 'http://localhost:5176/owner/topup';
-        return;
-      }
-    }
-
-    try {
-      setSubmitting(true);
-
-      const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-      const reservationId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`;
-
-      const insertPayload = {
-        mabang: reservationId,
-        manguoidung: vehicle.manguoidung,
-        mabaido: parkingLot.mabaido,
-        makhuvuc: zone.makhuvuc,
-        mavitri: selectedSpot.mavitri,
-        loaithanhtoan: getPaymentLabel(paymentMethod),
-        thanhtien: selectedPrice.price,
-        ngayhethan: expiresAt,
-        trangthai: 'đã đặt chỗ',
-      };
-
-      const { error: insertError } = await supabase
-        .from('bangdatchotruoc')
-        .insert(insertPayload as any);
-
-      if (insertError) throw insertError;
-
-      const { error: updateSpotError } = await supabase
-        .from('vitrido')
-        .update({ trangthai: 2 })
-        .eq('mavitri', selectedSpot.mavitri)
-        .eq('makhuvuc', zone.makhuvuc)
-        .eq('mabanggia', selectedSpot.mabanggia ?? selectedPrice.mabanggia);
-
-      if (updateSpotError) throw updateSpotError;
-
-      if (paymentMethod === 'coin' && selectedPrice.coinPrice != null) {
-        const nextBalance = Number(coinBalance ?? 0) - Number(selectedPrice.coinPrice ?? 0);
-
-        const { error: balanceUpdateError } = await supabase
-          .from('ctchuxe')
-          .update({ xuao: nextBalance })
-          .eq('manguoidung', vehicle.manguoidung);
-
-        if (balanceUpdateError) throw balanceUpdateError;
-      }
-
-      toast.success('Đã đặt chỗ thành công!');
-
-      globalThis.location.replace('/owner');
-    } catch (err: any) {
-      console.error(err);
-      toast.error(err?.message || 'Không thể tạo đặt chỗ.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
+    globalThis.location.replace('/owner');
+  } catch (err: any) {
+    console.error(err);
+    toast.error(err?.message || 'Không thể tạo đặt chỗ.');
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   if (loading) {
     return (

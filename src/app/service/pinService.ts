@@ -206,7 +206,10 @@ export const sendPinResetOtp = async (email: string): Promise<boolean> => {
   if (insertError) throw insertError;
 
   const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(normalized);
-  if (recoveryError) throw recoveryError;
+  if (recoveryError) {
+  console.error("Recovery error:", recoveryError);
+  throw recoveryError;
+}
 
   return true;
 };

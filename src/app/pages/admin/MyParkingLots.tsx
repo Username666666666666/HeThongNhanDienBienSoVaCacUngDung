@@ -25,6 +25,12 @@ type LotRow = {
   congkhai: boolean;
   danhgia?: boolean;
 };
+type GateRow = {
+  macong: string;
+  tencong: string;
+  loaicong: 'vao' | 'ra' | 'ca_hai';
+  makhuvuc: string;
+};
 
 type ZoneRow = {
   makhuvuc: string;
@@ -32,8 +38,11 @@ type ZoneRow = {
   hinhkhuvuc: string;
   mota: string;
   mabaido: string;
+  supportedVehicleTypes?: string[];
   spots: SpotRow[];
+  gates: GateRow[];
 };
+
 
 type SpotRow = {
   mavitri: string;
@@ -80,10 +89,11 @@ type ParkingLot = {
   zonesCount: number;
   pricingCount: number;
   amenitiesCount: number;
+  gatesCount: number;
   ratingsCount: number;
   zones: ZoneRow[];
-pricing: PricingRow[];
-amenities: AmenityRow[];
+  pricing: PricingRow[];
+  amenities: AmenityRow[];
 };
 
 const currency = new Intl.NumberFormat('vi-VN');
@@ -119,18 +129,21 @@ const [
   { data: zones, error: zoneError },
   { data: amenities, error: amenityError },
   { data: pricing, error: pricingError },
-  { data: supports, error: supportError }
+  { data: supports, error: supportError },
+  { data: gates, error: gateError }
 ] = await Promise.all([
   supabase.from('khuvudo').select('makhuvuc, tenkhuvuc, hinhkhuvuc, mota, mabaido').in('mabaido', lotIds),
   supabase.from('tienich').select('matienich, mabaido, ten_tien_ich').in('mabaido', lotIds),
   supabase.from('banggia').select('mabanggia, loaixe, loaigia, thanhtien, thanhtoanxuao, mabaido, kieuxe').in('mabaido', lotIds),
-  supabase.from('phuongtienhotro').select('makhuvuc, mabanggia')
+  supabase.from('phuongtienhotro').select('makhuvuc, mabanggia'),
+  supabase.from('congtruc').select('macong, tencong, loaicong, makhuvuc')
 ]);
 if (supportError) throw supportError;
 
   if (zoneError) throw zoneError;
   if (amenityError) throw amenityError;
   if (pricingError) throw pricingError;
+  if (gateError) throw gateError;
 
 const zoneIds = (zones ?? []).map((z) => z.makhuvuc);
 const pricingIds = (pricing ?? []).map((p) => p.mabanggia);
@@ -180,6 +193,13 @@ const spotMap = new Map<string, (SpotRow & { pricing: (PricingRow & { coinPrice:
     pricing: s.mabanggia ? pricingMap.get(s.mabanggia) ?? null : null,
   });
 });
+const gateMap = new Map<string, GateRow[]>();
+(gates ?? []).forEach((g: any) => {
+  if (!gateMap.has(g.makhuvuc)) gateMap.set(g.makhuvuc, []);
+  gateMap.get(g.makhuvuc)!.push({
+    ...g,
+  });
+});
 
   return lots.map((lot: any) => {
     const lotZones = (zones ?? [])
@@ -194,6 +214,7 @@ const spotMap = new Map<string, (SpotRow & { pricing: (PricingRow & { coinPrice:
     return {
       ...z,
       spots: spotMap.get(z.makhuvuc) ?? [],
+      gates: gateMap.get(z.makhuvuc) ?? [],
       supportedVehicleTypes,
     };
   });
@@ -205,9 +226,10 @@ const spotMap = new Map<string, (SpotRow & { pricing: (PricingRow & { coinPrice:
         coinPrice: coinMap.get(p.mabanggia) ?? 0,
       }));
 
-    const totalSpots = lotZones.reduce((sum, z) => sum + (z.spots?.length ?? 0), 0);
-    const availableSpots = lotZones.reduce((sum, z) => sum + (z.spots ?? []).filter((s: SpotRow) => Number(s.trangthai) === 0).length, 0);
-    const amenitiesCount = (amenities ?? []).filter((a: any) => a.mabaido === lot.mabaido).length;
+   const totalSpots = lotZones.reduce((sum, z) => sum + (z.spots?.length ?? 0), 0);
+const availableSpots = lotZones.reduce((sum, z) => sum + (z.spots ?? []).filter((s: SpotRow) => Number(s.trangthai) === 0).length, 0);
+const gatesCount = lotZones.reduce((sum, z) => sum + (z.gates?.length ?? 0), 0);
+const amenitiesCount = (amenities ?? []).filter((a: any) => a.mabaido === lot.mabaido).length;
 
     return {
       ...lot,
@@ -216,6 +238,7 @@ const spotMap = new Map<string, (SpotRow & { pricing: (PricingRow & { coinPrice:
       zonesCount: lotZones.length,
       pricingCount: lotPricing.length,
       amenitiesCount,
+      gatesCount,
       ratingsCount: 0,
       zones: lotZones,
       pricing: lotPricing,
@@ -492,7 +515,7 @@ export const ParkingLotEditPage = () => {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'media' | 'zones' | 'pricing' | 'amenities' | 'danger'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'media' | 'zones' | 'pricing' | 'amenities' | 'gates' | 'danger'>('overview');
   const [lot, setLot] = useState<any>(null);
 
   const load = async () => {
@@ -560,14 +583,15 @@ export const ParkingLotEditPage = () => {
         </div>
         <div className="max-w-7xl mx-auto px-4 pb-4">
           <div className="flex gap-2 overflow-x-auto">
-            {[
-              ['overview', 'Thông tin bãi đỗ'],
-              ['media', 'Ảnh đại diện'],
-              ['zones', 'Sân đỗ / vị trí'],
-              ['pricing', 'Bảng giá'],
-              ['amenities', 'Tiện ích'],
-              ['danger', 'Xóa bãi đỗ'],
-            ].map(([key, label]) => (
+           {[
+  ['overview', 'Thông tin bãi đỗ'],
+  ['media', 'Ảnh đại diện'],
+  ['zones', 'Sân đỗ / vị trí'],
+  ['pricing', 'Bảng giá'],
+  ['amenities', 'Tiện ích'],
+  ['gates', 'Thêm cổng'],
+  ['danger', 'Xóa bãi đỗ'],
+].map(([key, label]) => (
               <button key={key} onClick={() => setActiveTab(key as any)} className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-semibold border transition ${activeTab === key ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'}`}>
                 {label}
               </button>
@@ -583,7 +607,8 @@ export const ParkingLotEditPage = () => {
           {activeTab === 'zones' && <ZoneManager lot={lot} onRefresh={load} />}
           {activeTab === 'pricing' && <PricingManager lot={lot} onRefresh={load} />}
           {activeTab === 'amenities' && <AmenityManager lot={lot} onRefresh={load} />}
-          {activeTab === 'danger' && <DangerZone lot={lot} onDeleted={() => navigate('/admin/my-parking-lots')} />}
+{activeTab === 'gates' && <GateManager lot={lot} onRefresh={load} />}
+{activeTab === 'danger' && <DangerZone lot={lot} onDeleted={() => navigate('/admin/my-parking-lots')} />}
         </div>
 
         <aside className="xl:col-span-4 space-y-6">
@@ -629,10 +654,11 @@ function QuickSummary({ lot }: { lot: any }) {
       <div className="space-y-3 text-sm">
         <SummaryRow label="Trạng thái" value={lot.congkhai ? 'Công khai' : 'Riêng tư'} />
         <SummaryRow label="Loại xe" value={vehicleTypes.length ? vehicleTypes.join(', ') : 'Chưa có'} />
-        <SummaryRow label="Bảng giá" value={`${lot.pricingCount} dòng`} />
-        <SummaryRow label="Sân đỗ" value={`${lot.zonesCount} khu vực`} />
-        <SummaryRow label="Vị trí" value={`${lot.totalSpots} vị trí`} />
-        <SummaryRow label="Tiện ích" value={`${lot.amenitiesCount} tiện ích`} />
+       <SummaryRow label="Bảng giá" value={`${lot.pricingCount} dòng`} />
+<SummaryRow label="Sân đỗ" value={`${lot.zonesCount} khu vực`} />
+<SummaryRow label="Vị trí" value={`${lot.totalSpots} vị trí`} />
+<SummaryRow label="Cổng" value={`${lot.gatesCount ?? 0} cổng`} />
+<SummaryRow label="Tiện ích" value={`${lot.amenitiesCount} tiện ích`} />
       </div>
     </div>
   );
@@ -743,9 +769,10 @@ function ZoneManager({ lot, onRefresh }: { lot: any; onRefresh: () => void }) {
     if (!window.confirm(`Xóa sân đỗ "${zone.tenkhuvuc}" cùng toàn bộ vị trí bên trong?`)) return;
     try {
       const spotIds = (zone.spots ?? []).map((s: any) => s.mavitri);
-      if (spotIds.length) await supabase.from('vitrido').delete().in('mavitri', spotIds);
-      await supabase.from('phuongtienhotro').delete().eq('makhuvuc', zone.makhuvuc);
-      const { error } = await supabase.from('khuvudo').delete().eq('makhuvuc', zone.makhuvuc);
+if (spotIds.length) await supabase.from('vitrido').delete().in('mavitri', spotIds);
+await supabase.from('phuongtienhotro').delete().eq('makhuvuc', zone.makhuvuc);
+await supabase.from('congtruc').delete().eq('makhuvuc', zone.makhuvuc);
+const { error } = await supabase.from('khuvudo').delete().eq('makhuvuc', zone.makhuvuc);
       if (error) throw error;
       toast.success('Đã xóa sân đỗ');
       onRefresh();
@@ -1488,7 +1515,185 @@ function AmenityManager({ lot, onRefresh }: { lot: any; onRefresh: () => void })
     </div>
   );
 }
+function GateManager({ lot, onRefresh }: { lot: any; onRefresh: () => void }) {
+  const [selectedZoneId, setSelectedZoneId] = useState<string>(lot.zones?.[0]?.makhuvuc ?? '');
+  const [gateName, setGateName] = useState('');
+  const [gateType, setGateType] = useState<'vao' | 'ra' | 'ca_hai'>('vao');
+  const [saving, setSaving] = useState(false);
 
+  useEffect(() => {
+    if (!selectedZoneId && lot.zones?.length) {
+      setSelectedZoneId(lot.zones[0].makhuvuc);
+    }
+  }, [lot.mabaido]);
+
+  const typeLabel = (type: 'vao' | 'ra' | 'ca_hai') => {
+    if (type === 'vao') return 'Cổng vào';
+    if (type === 'ra') return 'Cổng ra';
+    return 'Cả hai';
+  };
+
+  const addGate = async () => {
+    if (!selectedZoneId) return toast.error('Chọn khu vực trước');
+    if (!gateName.trim()) return toast.error('Nhập tên cổng trước');
+
+    setSaving(true);
+    try {
+      const { error } = await supabase.from('congtruc').insert({
+        makhuvuc: selectedZoneId,
+        tencong: gateName.trim(),
+        loaicong: gateType,
+      });
+
+      if (error) throw error;
+
+      toast.success('Đã thêm cổng');
+      setGateName('');
+      setGateType('vao');
+      onRefresh();
+    } catch (error: any) {
+      toast.error(error?.message ?? 'Thêm cổng thất bại');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateGate = async (gateId: string, payload: Record<string, any>) => {
+    const { error } = await supabase.from('congtruc').update(payload).eq('macong', gateId);
+    if (error) return toast.error(error.message);
+
+    toast.success('Đã cập nhật cổng');
+    onRefresh();
+  };
+
+  const removeGate = async (gateId: string, gateNameText: string) => {
+    if (!window.confirm(`Xóa cổng "${gateNameText}"?`)) return;
+
+    const { error } = await supabase.from('congtruc').delete().eq('macong', gateId);
+    if (error) return toast.error(error.message);
+
+    toast.success('Đã xóa cổng');
+    onRefresh();
+  };
+
+  return (
+    <div className="bg-white rounded-3xl border border-gray-200 shadow-sm p-6 space-y-5">
+      <EditorSectionTitle
+        title="Thêm cổng"
+        desc="Cổng được lưu vào bảng congtruc và liên kết theo makhuvuc của từng khu vực. Mỗi cổng có tên và loại cổng: vào, ra, hoặc cả hai."
+      />
+
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div>
+          <label className="block text-sm mb-2 text-gray-700 font-medium">Chọn khu vực</label>
+          <select
+            value={selectedZoneId}
+            onChange={(e) => setSelectedZoneId(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="">-- Chọn khu vực --</option>
+            {(lot.zones ?? []).map((zone: any) => (
+              <option key={zone.makhuvuc} value={zone.makhuvuc}>
+                {zone.tenkhuvuc}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <Field label="Tên cổng" value={gateName} onChange={setGateName} />
+
+        <div>
+          <label className="block text-sm mb-2 text-gray-700 font-medium">Loại cổng</label>
+          <select
+            value={gateType}
+            onChange={(e) => setGateType(e.target.value as 'vao' | 'ra' | 'ca_hai')}
+            className="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white outline-none focus:ring-2 focus:ring-purple-500"
+          >
+            <option value="vao">Cổng vào</option>
+            <option value="ra">Cổng ra</option>
+            <option value="ca_hai">Cả hai</option>
+          </select>
+        </div>
+
+        <div className="flex items-end">
+          <button
+            onClick={addGate}
+            disabled={saving}
+            className="w-full px-4 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-semibold hover:from-purple-700 hover:to-indigo-700 transition disabled:opacity-60"
+          >
+            Thêm cổng
+          </button>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {(lot.zones ?? []).map((zone: any) => (
+          <div key={zone.makhuvuc} className="rounded-2xl border border-gray-200 p-4 bg-gray-50 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">{zone.tenkhuvuc}</h3>
+                <p className="text-sm text-gray-500">
+                  {zone.gates?.length ?? 0} cổng
+                </p>
+              </div>
+            </div>
+
+            {(zone.gates ?? []).length === 0 ? (
+              <div className="text-sm text-gray-500">Chưa có cổng nào trong khu vực này.</div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {(zone.gates ?? []).map((gate: any) => (
+                  <div key={gate.macong} className="rounded-2xl border border-gray-200 bg-white p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <button
+                        onClick={() => {
+                          const next = window.prompt('Đổi tên cổng', gate.tencong)?.trim();
+                          if (!next || next === gate.tencong) return;
+                          updateGate(gate.macong, { tencong: next });
+                        }}
+                        className="font-semibold text-gray-800 hover:underline text-left"
+                      >
+                        {gate.tencong}
+                      </button>
+
+                      <button
+                        onClick={() => removeGate(gate.macong, gate.tencong)}
+                        className="text-red-500 text-sm"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="text-xs text-gray-500">
+                      Loại cổng hiện tại: <strong>{typeLabel(gate.loaicong)}</strong>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Đổi loại cổng</label>
+                      <select
+                        value={gate.loaicong}
+                        onChange={(e) =>
+                          updateGate(gate.macong, {
+                            loaicong: e.target.value,
+                          })
+                        }
+                        className="w-full px-3 py-2 rounded-xl border border-gray-300 bg-white text-sm"
+                      >
+                        <option value="vao">Cổng vào</option>
+                        <option value="ra">Cổng ra</option>
+                        <option value="ca_hai">Cả hai</option>
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 function DangerZone({ lot, onDeleted }: { lot: any; onDeleted: () => void }) {
   const deleteAll = async () => {
     if (!window.confirm(`Xóa toàn bộ bãi đỗ ${lot.tenbaido}? Hành động này sẽ xóa sân, vị trí, bảng giá, xu ảo và tiện ích liên quan.`)) return;
@@ -1496,10 +1701,11 @@ function DangerZone({ lot, onDeleted }: { lot: any; onDeleted: () => void }) {
     const pricing = lot.pricing ?? [];
     try {
       for (const zone of zones) {
-        await supabase.from('phuongtienhotro').delete().eq('makhuvuc', zone.makhuvuc);
-        await supabase.from('vitrido').delete().eq('makhuvuc', zone.makhuvuc);
-        await supabase.from('khuvudo').delete().eq('makhuvuc', zone.makhuvuc);
-      }
+  await supabase.from('phuongtienhotro').delete().eq('makhuvuc', zone.makhuvuc);
+  await supabase.from('congtruc').delete().eq('makhuvuc', zone.makhuvuc);
+  await supabase.from('vitrido').delete().eq('makhuvuc', zone.makhuvuc);
+  await supabase.from('khuvudo').delete().eq('makhuvuc', zone.makhuvuc);
+}
       for (const p of pricing) {
         await supabase.from('banggiaxuao').delete().eq('mabanggia', p.mabanggia);
         await supabase.from('banggia').delete().eq('mabanggia', p.mabanggia);
@@ -1594,9 +1800,9 @@ export const ParkingLotDetailsPage = () => {
     <div className="min-h-screen bg-gray-50 grid place-items-center p-6">
       <div className="max-w-2xl w-full bg-white rounded-3xl border border-gray-200 shadow-sm p-8 text-center space-y-4">
         <h1 className="text-3xl font-bold text-gray-900">Trang chi tiết</h1>
-        <p className="text-gray-600">Chỗ này bạn có thể làm dashboard chi tiết: thống kê, đánh giá, lịch sử chỗ trống, biểu đồ doanh thu, log thay đổi. Hiện tại mình để tối giản để không làm rối luồng chính.</p>
+        <p className="text-gray-600">Đây là khu vực admin cấu hình bãi đổ thêm các thông tin chi tiết để quản lý bãi đỗ nhấn chỉnh sửa để bắt đầu</p>
         <div className="flex gap-3 justify-center">
-          <button onClick={() => navigate(`/admin/parking-lot/${lotId}/edit`)} className="px-5 py-3 rounded-xl bg-purple-600 text-white font-semibold">Quay lại chỉnh sửa</button>
+          <button onClick={() => navigate(`/admin/parking-lot/${lotId}/edit`)} className="px-5 py-3 rounded-xl bg-purple-600 text-white font-semibold">chỉnh sửa</button>
           <button onClick={() => navigate('/admin/my-parking-lots')} className="px-5 py-3 rounded-xl border border-gray-300 font-semibold">Về danh sách</button>
         </div>
       </div>
