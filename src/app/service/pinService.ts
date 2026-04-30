@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase.ts";
+import bcrypt from 'bcryptjs';
 
 export type PinResetRequest = {
   id: string;
@@ -35,21 +36,15 @@ export const generatePin = (): string => {
 };
 
 export const hashPin = async (pin: string): Promise<string> => {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(pin);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-
-  return Array.from(new Uint8Array(hashBuffer))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const saltRounds = 12;
+  return await bcrypt.hash(pin, saltRounds);
 };
 
 export const comparePin = async (
   inputPin: string,
   storedHash: string
 ): Promise<boolean> => {
-  const hashed = await hashPin(inputPin);
-  return hashed === storedHash;
+  return await bcrypt.compare(inputPin, storedHash);
 };
 
 export const getUserByEmail = async (email: string): Promise<UserRow | null> => {
