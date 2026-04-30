@@ -1,5 +1,9 @@
 import { supabase } from "../utils/supabase.ts";
 
+/**
+ * PIN Reset Request Type
+ * Represents a PIN reset request from the yeu_cau_dat_lai_pin table
+ */
 export type PinResetRequest = {
   id: string;
   email: string | null;
@@ -12,28 +16,56 @@ export type PinResetRequest = {
   thoi_diem_tao: string | null;
 };
 
+/**
+ * User row from the nguoidung table
+ */
 type UserRow = {
   manguoidung: string;
   email: string | null;
   chucnang: string | null;
 };
 
+/**
+ * Admin PIN row from the ctadmin table
+ */
 type AdminPinRow = {
   manguoidung: string;
   mapinadmin: string | null;
 };
 
+/**
+ * User PIN row from the nguoidung table
+ */
 type UserPinRow = {
   manguoidung: string;
   mapinnguoidung: string | null;
 };
 
+/**
+ * Normalize email by trimming and converting to lowercase
+ * @private
+ */
 const normalizeEmail = (value: string) => value.trim().toLowerCase();
 
+/**
+ * Generate a random 8-digit PIN code
+ * @returns {string} A random 8-digit PIN as a string
+ * @example
+ * const pin = generatePin(); // "82345691"
+ */
 export const generatePin = (): string => {
   return Math.floor(10000000 + Math.random() * 90000000).toString();
 };
 
+/**
+ * Hash a PIN using SHA-256 algorithm
+ * Used to securely store PINs in the database
+ * @param {string} pin - The plain text PIN to hash
+ * @returns {Promise<string>} The SHA-256 hash of the PIN
+ * @example
+ * const hash = await hashPin("12345678");
+ * // "1f2b85f6a1e1d7e5c5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f5f"
+ */
 export const hashPin = async (pin: string): Promise<string> => {
   const encoder = new TextEncoder();
   const data = encoder.encode(pin);
@@ -44,6 +76,14 @@ export const hashPin = async (pin: string): Promise<string> => {
     .join("");
 };
 
+/**
+ * Compare a PIN against a stored hash
+ * @param {string} inputPin - The PIN entered by the user
+ * @param {string} storedHash - The stored SHA-256 hash
+ * @returns {Promise<boolean>} True if the PIN matches the hash, false otherwise
+ * @example
+ * const isValid = await comparePin("12345678", storedHash);
+ */
 export const comparePin = async (
   inputPin: string,
   storedHash: string
@@ -52,6 +92,14 @@ export const comparePin = async (
   return hashed === storedHash;
 };
 
+/**
+ * Get user information by email address
+ * @param {string} email - The user's email address
+ * @returns {Promise<UserRow | null>} User data or null if not found
+ * @throws {Error} If the database query fails
+ * @example
+ * const user = await getUserByEmail("user@example.com");
+ */
 export const getUserByEmail = async (email: string): Promise<UserRow | null> => {
   const normalized = normalizeEmail(email);
 
@@ -65,6 +113,12 @@ export const getUserByEmail = async (email: string): Promise<UserRow | null> => 
   return data ?? null;
 };
 
+/**
+ * Get the admin PIN hash for a user
+ * @param {string} userId - The user's ID (manguoidung)
+ * @returns {Promise<AdminPinRow | null>} Admin PIN data or null if not found
+ * @throws {Error} If the database query fails
+ */
 export const getAdminPinHash = async (
   userId: string
 ): Promise<AdminPinRow | null> => {
@@ -78,6 +132,12 @@ export const getAdminPinHash = async (
   return data ?? null;
 };
 
+/**
+ * Get the user PIN hash from the nguoidung table
+ * @param {string} userId - The user's ID (manguoidung)
+ * @returns {Promise<UserPinRow | null>} User PIN data or null if not found
+ * @throws {Error} If the database query fails
+ */
 export const getUserPinHash = async (
   userId: string
 ): Promise<UserPinRow | null> => {
@@ -91,6 +151,13 @@ export const getUserPinHash = async (
   return data ?? null;
 };
 
+/**
+ * Create or update an admin PIN
+ * @param {string} userId - The admin user's ID
+ * @param {string} newPin - The new PIN to set (will be hashed)
+ * @returns {Promise<boolean>} True if successful
+ * @throws {Error} If the database operation fails
+ */
 export const createAdminPin = async (
   userId: string,
   newPin: string
@@ -111,6 +178,12 @@ export const createAdminPin = async (
   return true;
 };
 
+/**
+ * Update an admin PIN (alias for createAdminPin)
+ * @param {string} userId - The admin user's ID
+ * @param {string} newPin - The new PIN to set
+ * @returns {Promise<boolean>} True if successful
+ */
 export const updateAdminPin = async (
   userId: string,
   newPin: string
@@ -118,6 +191,14 @@ export const updateAdminPin = async (
   return createAdminPin(userId, newPin);
 };
 
+/**
+ * Change admin PIN with verification of the old PIN
+ * @param {string} userId - The admin user's ID
+ * @param {string} oldPin - The current PIN (for verification)
+ * @param {string} newPin - The new PIN to set
+ * @returns {Promise<boolean>} True if successful
+ * @throws {Error} If old PIN is incorrect or no PIN is set
+ */
 export const changeAdminPinWithOldPin = async (
   userId: string,
   oldPin: string,
@@ -137,6 +218,13 @@ export const changeAdminPinWithOldPin = async (
   return updateAdminPin(userId, newPin);
 };
 
+/**
+ * Create or update a user PIN
+ * @param {string} userId - The user's ID
+ * @param {string} newPin - The new PIN to set (will be hashed)
+ * @returns {Promise<boolean>} True if successful
+ * @throws {Error} If the database operation fails
+ */
 export const createUserPin = async (
   userId: string,
   newPin: string
@@ -155,6 +243,12 @@ export const createUserPin = async (
   return true;
 };
 
+/**
+ * Update a user PIN (alias for createUserPin)
+ * @param {string} userId - The user's ID
+ * @param {string} newPin - The new PIN to set
+ * @returns {Promise<boolean>} True if successful
+ */
 export const updateUserPin = async (
   userId: string,
   newPin: string
@@ -162,6 +256,14 @@ export const updateUserPin = async (
   return createUserPin(userId, newPin);
 };
 
+/**
+ * Change user PIN with verification of the old PIN
+ * @param {string} userId - The user's ID
+ * @param {string} oldPin - The current PIN (for verification)
+ * @param {string} newPin - The new PIN to set
+ * @returns {Promise<boolean>} True if successful
+ * @throws {Error} If old PIN is incorrect or no PIN is set
+ */
 export const changeUserPinWithOldPin = async (
   userId: string,
   oldPin: string,
@@ -181,6 +283,13 @@ export const changeUserPinWithOldPin = async (
   return updateUserPin(userId, newPin);
 };
 
+/**
+ * Send a PIN reset OTP to the user's email via Supabase Auth
+ * Creates a reset request entry in the yeu_cau_dat_lai_pin table
+ * @param {string} email - The user's email address
+ * @returns {Promise<boolean>} True if OTP email was sent successfully
+ * @throws {Error} If email is invalid, user not found, or email sending fails
+ */
 export const sendPinResetOtp = async (email: string): Promise<boolean> => {
   const normalized = normalizeEmail(email);
   if (!normalized) {
@@ -207,13 +316,19 @@ export const sendPinResetOtp = async (email: string): Promise<boolean> => {
 
   const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(normalized);
   if (recoveryError) {
-  console.error("Recovery error:", recoveryError);
-  throw recoveryError;
-}
+    console.error("Recovery error:", recoveryError);
+    throw recoveryError;
+  }
 
   return true;
 };
 
+/**
+ * Verify a PIN reset OTP token
+ * @param {string} email - The user's email address
+ * @param {string} otp - The OTP code to verify
+ * @returns {Promise<PinResetRequest | null>} The reset request if valid, null if invalid
+ */
 export const verifyPinOtp = async (
   email: string,
   otp: string
@@ -243,6 +358,13 @@ export const verifyPinOtp = async (
   return data as PinResetRequest;
 };
 
+/**
+ * Mark a PIN reset request as used
+ * This prevents the same OTP from being used multiple times
+ * @param {string} id - The reset request ID
+ * @returns {Promise<boolean>} True if successfully marked as used
+ * @throws {Error} If the database operation fails
+ */
 export const markPinResetRequestUsed = async (id: string): Promise<boolean> => {
   const { error } = await supabase
     .from("yeu_cau_dat_lai_pin")

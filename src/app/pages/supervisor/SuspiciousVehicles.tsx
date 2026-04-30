@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -37,6 +37,8 @@ interface SuspiciousVehicle {
 
 export const SuspiciousVehicles = () => {
   const navigate = useNavigate();
+  // Track pending timeouts for cleanup
+  const timeoutRefs = useRef<NodeJS.Timeout[]>([]);
 
   const [vehicles, setVehicles] = useState<SuspiciousVehicle[]>([
     {
@@ -86,6 +88,13 @@ export const SuspiciousVehicles = () => {
   const [noteInput, setNoteInput] = useState('');
   const [showNoteModal, setShowNoteModal] = useState(false);
 
+  // Cleanup timeouts on component unmount
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach(timeout => clearTimeout(timeout));
+    };
+  }, []);
+
   const handleMarkAsFlagged = (vehicleId: string) => {
     const vehicle = vehicles.find((v) => v.id === vehicleId);
     if (vehicle) {
@@ -99,9 +108,10 @@ export const SuspiciousVehicles = () => {
 
   const handleContactOwner = (vehicle: SuspiciousVehicle) => {
     toast.info(`📞 Đang gọi cho ${vehicle.ownerName} - ${vehicle.ownerPhone}...`);
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       toast.success(`✓ Đã ghi nhận cuộc gọi với ${vehicle.ownerName}`);
     }, 1500);
+    timeoutRefs.current.push(timeout);
   };
 
   const handleAddNote = () => {

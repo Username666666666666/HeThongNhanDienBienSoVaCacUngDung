@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, ArrowLeft, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
@@ -6,6 +6,7 @@ import { supabase } from '../utils/supabase.ts';
 
 export const ForgotPassword = () => {
   const navigate = useNavigate();
+  const resetTimer = useRef<NodeJS.Timeout | null>(null);
   const [step, setStep] = useState<'email' | 'pin' | 'reset'>('email');
   const [email, setEmail] = useState('');
   const [pin, setPin] = useState('');
@@ -100,21 +101,29 @@ setStep('pin');
   // Lưu ý: Để update mật khẩu mà không có session, bạn cần một API trung gian 
   // hoặc dùng phương thức Admin của Supabase nếu app có quyền.
   // Ở đây giả định bạn dùng Edge Function khác để cập nhật mật khẩu an toàn:
-const { data, error } = await supabase.functions.invoke('update-user-password', {
-  body: { email, newPassword }
-});
+  const { data, error } = await supabase.functions.invoke('update-user-password', {
+    body: { email, newPassword },
+  });
 
-if (error) throw error;
+  if (error) throw error;
 
-if (!data?.success) {
-  toast.error(`❌ ${data?.message ?? 'Đổi mật khẩu thất bại'}`);
-  return;
-}
+  if (!data?.success) {
+    toast.error(`❌ ${data?.message ?? 'Đổi mật khẩu thất bại'}`);
+    return;
+  }
 
-toast.success(`✅ ${data.message}`);
-setTimeout(() => navigate('/login'), 1500);
+  toast.success(`✅ ${data.message}`);
+  resetTimer.current = setTimeout(() => navigate('/login'), 1500);
   setLoading(false);
 };
+
+  useEffect(() => {
+    return () => {
+      if (resetTimer.current) {
+        clearTimeout(resetTimer.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-pink-50 to-rose-50 flex items-center justify-center p-4">

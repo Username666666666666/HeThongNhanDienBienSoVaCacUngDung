@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Building2, Users, Crown, CheckCircle, 
@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 
 export const ServiceSubscription = () => {
   const navigate = useNavigate();
+  // Track pending timeouts for cleanup
+  const timeoutRefs = useRef<NodeJS.Timeout[]>([]);
 
   // Mock subscription status
   const [currentSubscription] = useState({
@@ -82,25 +84,35 @@ export const ServiceSubscription = () => {
 
   const handleRegister = () => {
     toast.info('🌐 Chuyển hướng đến website nhà cung cấp để đăng ký...');
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       // In real app, would redirect to provider website
       toast.success('✅ Đã mở trang đăng ký dịch vụ!');
     }, 1500);
+    timeoutRefs.current.push(timeout);
   };
 
   const handleUpgrade = (packageId: string) => {
     toast.loading('Đang xử lý yêu cầu nâng cấp...');
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       toast.success(`✅ Đã gửi yêu cầu nâng cấp lên gói ${packages.find(p => p.id === packageId)?.name}!`);
     }, 1500);
+    timeoutRefs.current.push(timeout);
   };
 
   const handleRenew = () => {
     toast.loading('Đang xử lý gia hạn...');
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       toast.success('✅ Đã gia hạn dịch vụ thành công!');
     }, 1500);
+    timeoutRefs.current.push(timeout);
   };
+
+  // Cleanup timeouts on component unmount
+  useEffect(() => {
+    return () => {
+      timeoutRefs.current.forEach(timeout => clearTimeout(timeout));
+    };
+  }, []);
 
   const daysUntilExpiry = Math.ceil(
     (currentSubscription.expiryDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Coins, Trophy, Clock, Users, Play, Plus, AlertTriangle, Gamepad2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,6 +10,8 @@ export const CoinGames = () => {
   const { user } = useAuth();
   const [showCreateGame, setShowCreateGame] = useState(false);
   const [selectedGame, setSelectedGame] = useState<CoinGame | null>(null);
+  // Track pending timeouts for cleanup
+  const timeoutRefs = useRef<NodeJS.Timeout[]>([]);
 
   const currentUser = {
     id: user?.id || 'user1',
@@ -97,6 +99,15 @@ export const CoinGames = () => {
     betAmount: 10000,
     maxParticipants: 2,
   });
+
+  // Cleanup timeouts on component unmount
+  useEffect(() => {
+    return () => {
+      if (timeoutRefs.current) {
+        timeoutRefs.current.forEach(timeout => clearTimeout(timeout));
+      }
+    };
+  }, []);
 
   const gameTypes = [
     {
@@ -206,9 +217,11 @@ export const CoinGames = () => {
     // Auto start game if full
     const updatedGame = updatedGames.find(g => g.id === gameId);
     if (updatedGame && updatedGame.participants.length >= updatedGame.maxParticipants) {
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         handlePlayGame(gameId);
       }, 1000);
+      if (!timeoutRefs.current) timeoutRefs.current = [];
+      timeoutRefs.current.push(timeout);
     }
   };
 

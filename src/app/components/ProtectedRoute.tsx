@@ -16,16 +16,16 @@ export const ProtectedRoute = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [redirectToLogin, setRedirectToLogin] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
-    let channel: any;
+    let channel: any; // TODO: Replace with proper Subscription type
 
     // 🔥 KICK ALL TAB
     const handleStorage = (event: StorageEvent) => {
       if (event.key === 'force_logout') {
-        console.log("🔥 Logout từ tab khác");
-        window.location.href = '/login';
+        setRedirectToLogin(true);
       }
     };
     window.addEventListener('storage', handleStorage);
@@ -33,15 +33,12 @@ export const ProtectedRoute = ({
     // 🔥 LISTEN SIGN OUT
     const { data: authListener } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
-        console.log("🔥 SIGNED OUT");
-        window.location.href = '/login';
+        setRedirectToLogin(true);
       }
     });
 
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-
-      console.log("SESSION:", session);
 
       if (!session) {
         setLoading(false);
@@ -58,7 +55,7 @@ export const ProtectedRoute = ({
         .single();
 
       if (error) {
-        console.error("Lỗi lấy role:", error);
+        // Handle role fetch error silently
       }
 
       const role = (data as NguoiDung | null)?.chucnang || null;
@@ -76,15 +73,11 @@ export const ProtectedRoute = ({
             table: 'nguoidung',
           },
           (payload: any) => {
-            console.log("🔥 REALTIME:", payload);
-
             const newData = payload.new as NguoiDung;
 
             if (newData?.manguoidung === userId) {
               setUserRole((oldRole) => {
                 if (oldRole && newData.chucnang !== oldRole) {
-                  console.log("🚨 ROLE CHANGED → KICK");
-
                   // logout tất cả
                   supabase.auth.signOut();
 
@@ -92,10 +85,7 @@ export const ProtectedRoute = ({
                   localStorage.setItem('force_logout', Date.now().toString());
 
                   // redirect
-                  setTimeout(() => {
-                    window.location.href = '/login';
-                  }, 100);
-
+                  setRedirectToLogin(true);
                   return null;
                 }
 
@@ -105,18 +95,13 @@ export const ProtectedRoute = ({
           }
         )
         .subscribe((status: string, err: any) => {
-  console.log("🔥 REALTIME STATUS:", status);
-
+  // Handle realtime subscription status
   if (status === "CHANNEL_ERROR") {
-    console.error("❌ REALTIME ERROR:", err);
+    // Handle realtime error
   }
 
   if (status === "TIMED_OUT") {
-    console.error("⏱️ REALTIME TIMEOUT");
-  }
-
-  if (status === "SUBSCRIBED") {
-    console.log("✅ REALTIME CONNECTED");
+    // Handle realtime timeout
   }
 });
     };
@@ -131,6 +116,10 @@ export const ProtectedRoute = ({
   }, []);
 
   if (loading) return <div>Đang xác thực...</div>;
+
+  if (redirectToLogin) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
 
   if (!userRole)
     return <Navigate to="/login" state={{ from: location }} replace />;
