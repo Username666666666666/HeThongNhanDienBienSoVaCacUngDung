@@ -1,4 +1,7 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View, TouchableOpacity, FlatList } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { Button } from '../components/Button';
+import { Card } from '../components/Card';
 
 interface ScreenProps {
   title: string;
@@ -20,6 +23,237 @@ const createScreen = (title: string, description?: string) => () => (
   <ScreenWrapper title={title} description={description} />
 );
 
+// Tab Screens
+export const VehiclesTab = () => {
+  const navigation = useNavigation();
+  const vehicleActions = [
+    { title: 'Đăng ký xe', screen: 'RegisterVehicle' },
+    { title: 'Trạng thái xe', screen: 'VehicleStatus' },
+    { title: 'Lịch sử ra vào', screen: 'OwnerVehicleEntryExitLog' },
+  ];
+
+  return (
+    <View style={styles.tabContainer}>
+      <Text style={styles.tabTitle}>Quản lý xe</Text>
+      <FlatList
+        data={vehicleActions}
+        keyExtractor={(item) => item.screen}
+        renderItem={({ item }) => (
+          <Card style={styles.card}>
+            <Button
+              title={item.title}
+              onPress={() => navigation.navigate(item.screen)}
+              size="large"
+            />
+          </Card>
+        )}
+        contentContainerStyle={styles.listContainer}
+      />
+    </View>
+  );
+};
+
+export const ParkingTab = () => {
+  const navigation = useNavigation();
+  const parkingActions = [
+    { title: 'Duyệt bãi đỗ', screen: 'BrowseParkingLots' },
+    { title: 'Đăng ký gửi xe', screen: 'ParkingRegistration' },
+    { title: 'Nạp xu', screen: 'TopUpCoins' },
+  ];
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Đỗ xe</Text>
+      <FlatList
+        data={parkingActions}
+        keyExtractor={(item) => item.screen}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate(item.screen)}
+          >
+            <Text style={styles.buttonText}>{item.title}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+};
+
+export const CommunityTab = () => {
+  const navigation = useNavigation();
+  const communityActions = [
+    { title: 'Tin tức cộng đồng', screen: 'CommunityFeed' },
+    { title: 'Đánh giá bãi đỗ', screen: 'ParkingReviews' },
+    { title: 'Báo cáo trộm cắp', screen: 'TheftReportPage' },
+    { title: 'Chat cộng đồng', screen: 'CommunityChat' },
+    { title: 'Trò chơi xu', screen: 'CoinGames' },
+    { title: 'Hỗ trợ', screen: 'SupportPage' },
+  ];
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Cộng đồng</Text>
+      <FlatList
+        data={communityActions}
+        keyExtractor={(item) => item.screen}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate(item.screen)}
+          >
+            <Text style={styles.buttonText}>{item.title}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+};
+
+export const MonitoringTab = () => {
+  const navigation = useNavigation();
+  const monitoringActions = [
+    { title: 'Quản lý cổng', screen: 'GateManagement' },
+    { title: 'Giám sát cổng đôi', screen: 'DualGateMonitoring' },
+    { title: 'Xe nghi vấn', screen: 'SuspiciousVehicles' },
+    { title: 'Lịch sử nghi vấn', screen: 'SuspiciousHistory' },
+  ];
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Giám sát</Text>
+      <FlatList
+        data={monitoringActions}
+        keyExtractor={(item) => item.screen}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate(item.screen)}
+          >
+            <Text style={styles.buttonText}>{item.title}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+};
+
+export const ManagementTab = () => {
+  const navigation = useNavigation();
+  const managementActions = [
+    { title: 'Quản lý ca', screen: 'ShiftManagement' },
+    { title: 'Lịch sử ra vào', screen: 'SupervisorVehicleEntryExitLog' },
+  ];
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Quản lý</Text>
+      <FlatList
+        data={managementActions}
+        keyExtractor={(item) => item.screen}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate(item.screen)}
+          >
+            <Text style={styles.buttonText}>{item.title}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+};
+
+export const AdminManagementTab = () => {
+  const navigation = useNavigation();
+  const managementActions = [
+    { title: 'Cấu hình bãi đỗ', screen: 'ParkingLotConfig' },
+    { title: 'Đăng ký dịch vụ', screen: 'ServiceSubscription' },
+    { title: 'Kiểm duyệt cộng đồng', screen: 'CommunityModeration' },
+    { title: 'Video ca làm', screen: 'ShiftVideoLogs' },
+    { title: 'Quản lý nhân sự', screen: 'StaffManagement' },
+    { title: 'Bãi đỗ của tôi', screen: 'MyParkingLots' },
+    { title: 'Đăng ký dịch vụ', screen: 'ServiceRegistration' },
+    { title: 'Quản lý camera', screen: 'CameraManagement' },
+    { title: 'Bảo mật PIN', screen: 'AdminPinSecurity' },
+  ];
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Quản lý</Text>
+      <FlatList
+        data={managementActions}
+        keyExtractor={(item) => item.screen}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate(item.screen)}
+          >
+            <Text style={styles.buttonText}>{item.title}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+};
+
+export const ProviderServicesTab = () => {
+  const navigation = useNavigation();
+  const servicesActions = [
+    { title: 'Cài đặt xu ảo', screen: 'VirtualCoinSettings' },
+    { title: 'Quản lý dịch vụ', screen: 'ServiceManagement' },
+    { title: 'Xác minh xe', screen: 'VehicleVerify' },
+  ];
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Dịch vụ</Text>
+      <FlatList
+        data={servicesActions}
+        keyExtractor={(item) => item.screen}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate(item.screen)}
+          >
+            <Text style={styles.buttonText}>{item.title}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+};
+
+export const ProviderManagementTab = () => {
+  const navigation = useNavigation();
+  const managementActions = [
+    { title: 'Quản lý thiết bị', screen: 'DeviceManagement' },
+    { title: 'Quản lý tài khoản', screen: 'AccountManagement' },
+    { title: 'Cài đặt hệ thống', screen: 'SystemSettings' },
+    { title: 'Quản lý gói', screen: 'PackageManagement' },
+    { title: 'Lịch bảo trì', screen: 'MaintenanceSchedule' },
+  ];
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Quản lý</Text>
+      <FlatList
+        data={managementActions}
+        keyExtractor={(item) => item.screen}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.button}
+            onPress={() => navigation.navigate(item.screen)}
+          >
+            <Text style={styles.buttonText}>{item.title}</Text>
+          </TouchableOpacity>
+        )}
+      />
+    </View>
+  );
+};
+
+// Existing screens
 export const Register = createScreen('Register', 'Đăng ký người dùng.');
 export const Login = createScreen('Login', 'Đăng nhập vào hệ thống.');
 export const ForgotPassword = createScreen('ForgotPassword', 'Khôi phục mật khẩu.');
@@ -80,15 +314,14 @@ export const NotFound = createScreen('NotFound', 'Trang không tìm thấy.');
 
 const styles = StyleSheet.create({
   container: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    flex: 1,
     padding: 24,
     backgroundColor: '#F9FAFB',
   },
   inner: {
-    width: '100%',
-    maxWidth: 640,
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     fontSize: 28,
@@ -102,5 +335,17 @@ const styles = StyleSheet.create({
     color: '#4B5563',
     textAlign: 'center',
     lineHeight: 24,
+  },
+  button: {
+    backgroundColor: '#007AFF',
+    padding: 16,
+    borderRadius: 8,
+    marginVertical: 8,
+    alignItems: 'center',
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });

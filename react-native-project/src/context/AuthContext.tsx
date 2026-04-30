@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, ReactNode, useMemo, useCallback } from 'react';
 import { supabase } from '../utils/supabase';
 import type { User as SupabaseAuthUser, Session } from '@supabase/supabase-js';
 import { User } from '../types';
@@ -74,7 +74,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const syncSessionUser = async (session: Session | null) => {
+  const syncSessionUser = useCallback(async (session: Session | null) => {
     if (!session?.user) return;
 
     try {
@@ -85,7 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -123,9 +123,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [syncSessionUser]);
 
-  const login = async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
     setLoading(true);
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
@@ -133,14 +133,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       throw new Error(error.message);
     }
     await syncSessionUser(data.session);
-  };
+  }, [syncSessionUser]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
-  };
+  }, []);
 
-  const updateProfile = async (updates: Partial<User>) => {
+  const updateProfile = useCallback(async (updates: Partial<User>) => {
     if (!user) return;
     const nextUser = { ...user, ...updates };
     setUser(nextUser);
@@ -152,32 +152,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (Object.keys(dbUpdates).length > 0) {
       await supabase.from('nguoidung').update(dbUpdates).eq('manguoidung', user.id);
     }
-  };
+  }, [user]);
 
-  const addVirtualCoins = (amount: number) => {
+  const addVirtualCoins = useCallback((amount: number) => {
     if (!user) return;
     setUser({ ...user, virtualCoins: (user.virtualCoins ?? 0) + amount });
-  };
+  }, [user]);
 
-  const spendVirtualCoins = (amount: number): boolean => {
+  const spendVirtualCoins = useCallback((amount: number): boolean => {
     if (!user) return false;
     if ((user.virtualCoins ?? 0) < amount) return false;
     setUser({ ...user, virtualCoins: (user.virtualCoins ?? 0) - amount });
     return true;
-  };
+  }, [user]);
+
+  const contextValue = useMemo(() => ({
+    user,
+    loading,
+    login,
+    logout,
+    updateProfile,
+    addVirtualCoins,
+    spendVirtualCoins,
+  }), [user, loading, login, logout, updateProfile, addVirtualCoins, spendVirtualCoins]);
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        login,
-        logout,
-        updateProfile,
-        addVirtualCoins,
-        spendVirtualCoins,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
