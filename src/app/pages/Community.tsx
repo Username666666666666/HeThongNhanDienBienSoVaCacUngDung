@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Search, Key, Info, MapPin, Star, LogOut, AlertTriangle, Map
@@ -23,7 +23,8 @@ export const Community = () => {
   const [communityCode, setCommunityCode] = useState<string>(location.state?.communityCode || '');
   const [hasCommunityAccess, setHasCommunityAccess] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-    const parkingLots: ParkingLot[] = [
+
+  const parkingLots: ParkingLot[] = [
     {
       code: 'PL001',
       name: 'Bãi đỗ xe Trung tâm A',
@@ -54,25 +55,35 @@ export const Community = () => {
       description: 'Gần sân bay, tiện lợi cho chuyến đi'
     },
   ];
+
   // Check if user should skip code entry (direct link from parking lot)
   const skipCodeEntry = location.state?.skipCodeEntry || shouldSkipCommunityCodeEntry(user?.role);
 
-  // Auto join if coming from parking lot details
-  if (location.state?.skipCodeEntry && location.state?.communityCode && !hasCommunityAccess) {
-    const lot = parkingLots.find(p => p.communityCode === location.state.communityCode);
-    if (lot) {
+  useEffect(() => {
+    const storedCode = localStorage.getItem('communityCode');
+    if (storedCode) {
+      setCommunityCode(storedCode);
       setHasCommunityAccess(true);
-      localStorage.setItem('communityCode', location.state.communityCode);
-      navigate(`/community/feed?code=${location.state.communityCode}`, { replace: true });
     }
-  }
+  }, []);
 
-  // Mock parking lots for main search page
+  useEffect(() => {
+    if (location.state?.skipCodeEntry && location.state.communityCode && !hasCommunityAccess) {
+      const normalizedCode = location.state.communityCode.toUpperCase().trim();
+      const lot = parkingLots.find(p => p.communityCode === normalizedCode);
+      if (!lot) return;
+      setHasCommunityAccess(true);
+      localStorage.setItem('communityCode', normalizedCode);
+      navigate(`/community/feed?code=${normalizedCode}`, { replace: true });
+    }
+  }, [location.state, hasCommunityAccess, navigate, parkingLots]);
 
-
-  const filteredParkingLots = parkingLots.filter(lot =>
-    lot.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    lot.address.toLowerCase().includes(searchQuery.toLowerCase())
+  const filteredParkingLots = useMemo(
+    () => parkingLots.filter(lot =>
+      lot.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      lot.address.toLowerCase().includes(searchQuery.toLowerCase())
+    ),
+    [parkingLots, searchQuery]
   );
 
   const handleEnterCode = () => {
