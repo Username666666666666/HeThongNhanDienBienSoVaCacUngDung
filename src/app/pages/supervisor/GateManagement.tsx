@@ -8,6 +8,7 @@ import {
 import { toast } from 'sonner';
 import { processLicensePlate } from '../../service/lprService.ts';
 import { supabase } from '../../utils/supabase.ts';
+import { validateLicensePlate, validateReservationCode, validateImageFile } from '../../utils/validation.ts';
 
 interface ScannedVehicle {
   plateNumber: string;
@@ -92,21 +93,13 @@ const normalizeStatus = (value: unknown) =>
   String(value ?? '').trim().toLowerCase();
 
 const isValidVietnamPlate = (plate: string) => {
-  const p = normalizePlate(plate);
-
-  // Format phổ biến:
-  // 29A12345 / 29A123.45 / 51F-12345 / 59X1-123.45
-  const regex = /^[0-9]{2}[A-Z][0-9A-Z]?[0-9]{4,5}$/;
-
-  return regex.test(p);
+  return validateLicensePlate(plate).isValid;
 };
 
-
-const normalizePlate = (value: unknown) =>
-  String(value ?? '')
-    .trim()
-    .toUpperCase()
-    .replace(/[\s.-]/g, '');
+const normalizePlate = (value: unknown) => {
+  const validation = validateLicensePlate(value);
+  return validation.isValid ? validation.sanitizedValue! : '';
+};
 
 const getSpotStatus = (value: unknown): 0 | 1 | 2 => {
   const n = Number(value);
@@ -321,47 +314,57 @@ const loadExitPaymentContext = async (entry: ExitActiveRow) => {
       console.error('LOAD BANGDATCHOTRUOC EXIT ERROR:', bookingError);
     } else {
       const matches = (bookingRows ?? []) as PreBookingRow[];
+      const plateToMatch = normalizePlate(entry.bienso);
+      const vehicleIds = matches
+        .map((booking) => booking.maphuongtien)
+        .filter((id): id is string => Boolean(id));
+
+      const vehicleMap = new Map<string, string>();
+      if (vehicleIds.length > 0) {
+        const { data: vehicleRows, error: vehicleError } = await supabase
+          .from('phuongtien')
+          .select('id, bienso')
+          .in('id', vehicleIds);
+
+        if (vehicleError) {
+          console.error('LOAD PHUONGTIEN EXIT ERROR:', vehicleError);
+        } else {
+          (vehicleRows ?? []).forEach((vehicle) => {
+            if (vehicle?.id && typeof vehicle.bienso === 'string') {
+              vehicleMap.set(vehicle.id, vehicle.bienso);
+            }
+          });
+        }
+      }
 
       for (const booking of matches) {
         if (!booking.maphuongtien) continue;
 
-        const { data: vehicleRow, error: vehicleError } = await supabase
-          .from('phuongtien')
-          .select('id, bienso')
-          .eq('id', booking.maphuongtien)
-          .maybeSingle();
+        const bookedPlate = normalizePlate(vehicleMap.get(booking.maphuongtien));
+        if (bookedPlate !== plateToMatch) continue;
 
-        if (vehicleError) {
-          console.error('LOAD PHUONGTIEN EXIT ERROR:', vehicleError);
-          continue;
-        }
+        const amount = Number(booking.thanhtien ?? 0);
 
-        if (
-          normalizePlate(vehicleRow?.bienso) === normalizePlate(entry.bienso)
-        ) {
-          const amount = Number(booking.thanhtien ?? 0);
+        setExitReservationRow(booking);
+        setExitPaymentContext({
+          source: 'reservation',
+          tongtien: amount,
+          loaigia: 'reservation',
+        });
 
-          setExitReservationRow(booking);
-          setExitPaymentContext({
-            source: 'reservation',
-            tongtien: amount,
-            loaigia: 'reservation',
-          });
+        setExitFeeRow({
+          id: booking.mabang,
+          maxevao: entry.maxevao,
+          bienso: entry.bienso,
+          loaigia: 'reservation',
+          ketthuc: true,
+          thoigianvao: entry.thoigianvao,
+          tien_hien_tai_hien_thi: amount,
+          loaixe: spot.loaixe,
+          kieuxe: spot.kieuxe,
+        });
 
-          setExitFeeRow({
-            id: booking.mabang,
-            maxevao: entry.maxevao,
-            bienso: entry.bienso,
-            loaigia: 'reservation',
-            ketthuc: true,
-            thoigianvao: entry.thoigianvao,
-            tien_hien_tai_hien_thi: amount,
-            loaixe: spot.loaixe,
-            kieuxe: spot.kieuxe,
-          });
-
-          return;
-        }
+        return;
       }
     }
   }
@@ -633,14 +636,23 @@ setCurrentLotId(lotId);
       (priceRows ?? []).map((price) => [price.mabanggia, price])
     );
 
-    const { data: spotRows, error: spotError } = await supabase
-      .from('vitrido')
-      .select('mavitri, tenvitri, trangthai, makhuvuc, mabanggia')
-      .in(
-        'makhuvuc',
-        (zoneRows ?? []).map((z) => z.makhuvuc)
-      )
-      .order('tenvitri', { ascending: true });
+    const zoneIds = Array.isArray(zoneRows)
+      ? zoneRows.map((z) => z.makhuvuc).filter(Boolean)
+      : [];
+
+    let spotRows: any[] = [];
+    let spotError: Error | null = null;
+
+    if (zoneIds.length > 0) {
+      const spotResult = await supabase
+        .from('vitrido')
+        .select('mavitri, tenvitri, trangthai, makhuvuc, mabanggia')
+        .in('makhuvuc', zoneIds)
+        .order('tenvitri', { ascending: true });
+
+      spotRows = spotResult.data ?? [];
+      spotError = spotResult.error;
+    }
 
     if (spotError) {
       console.error('LOAD VITRIDO ERROR:', spotError);
@@ -648,29 +660,23 @@ setCurrentLotId(lotId);
       return;
     }
 
- const mappedSpots: ParkingSpotView[] = (spotRows ?? []).map((spot) => {
-  const zone = zoneMap.get(spot.makhuvuc);
-  const price = spot.mabanggia ? priceMap.get(spot.mabanggia) : null;
+    const mappedSpots: ParkingSpotView[] = (spotRows ?? []).map((spot) => {
+      const zone = zoneMap.get(spot.makhuvuc);
+      const price = spot.mabanggia ? priceMap.get(spot.mabanggia) : null;
 
-  return {
-  mavitri: spot.mavitri,
-  tenvitri: spot.tenvitri,
-  makhuvuc: spot.makhuvuc,
-  tenkhuvuc: zone?.tenkhuvuc || 'Khu vực',
-
-  mabanggia: spot.mabanggia || null,
-
-  loaixe: price?.loaixe || 'Chưa có loại xe',
-
-  loaigia: price?.loaigia || null,
-
-  kieuxe: price?.kieuxe || null,
-
-  thanhtien: price?.thanhtien ?? null,
-
-  trangthai: spot.trangthai ?? null,
-};
-});
+      return {
+        mavitri: spot.mavitri,
+        tenvitri: spot.tenvitri,
+        makhuvuc: spot.makhuvuc,
+        tenkhuvuc: zone?.tenkhuvuc || 'Khu vực',
+        mabanggia: spot.mabanggia || null,
+        loaixe: price?.loaixe || 'Chưa có loại xe',
+        loaigia: price?.loaigia || null,
+        kieuxe: price?.kieuxe || null,
+        thanhtien: price?.thanhtien ?? null,
+        trangthai: spot.trangthai ?? null,
+      };
+    });
 
     setParkingSpots(mappedSpots);
   } finally {
@@ -797,15 +803,15 @@ const handleConfirmEntry = async () => {
   }
 
   const spotStatus = getSpotStatus(spot.trangthai);
-  const code = reservationCode.trim().toUpperCase();
+  const codeValidation = validateReservationCode(reservationCode);
 
   if (spotStatus === 1) {
     toast.error('Vị trí này đã có xe');
     return;
   }
 
-  if (spotStatus === 2 && !/^[A-Z0-9]{8}$/.test(code)) {
-    toast.error('Mã phải gồm 8 ký tự (chữ in hoa + số)');
+  if (spotStatus === 2 && !codeValidation.isValid) {
+    toast.error(codeValidation.error);
     return;
   }
 
@@ -822,7 +828,7 @@ const handleConfirmEntry = async () => {
       .select(
         'mabang, manguoidung, mabaido, makhuvuc, mavitri, loaithanhtoan, thanhtien, ngayhethan, trangthai, maphuongtien, mathanhtoan'
       )
-      .eq('mathanhtoan', code)
+      .eq('mathanhtoan', codeValidation.sanitizedValue!)
       .eq('mabaido', currentLotId)
       .maybeSingle();
 
@@ -1494,14 +1500,10 @@ const handleFinishParkingTime = async () => {
     <input
       type="text"
       value={reservationCode}
-      onChange={(e) =>
-        setReservationCode(
-          e.target.value
-            .toUpperCase()
-            .replace(/[^A-Z0-9]/g, '')
-            .slice(0, 8)
-        )
-      }
+      onChange={(e) => {
+        const validation = validateReservationCode(e.target.value);
+        setReservationCode(validation.isValid ? validation.sanitizedValue! : e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8));
+      }}
       placeholder="VD: AB12CD34"
       className="w-full px-4 py-3 border-2 border-yellow-500 rounded-xl outline-none focus:ring-2 focus:ring-yellow-500"
     />

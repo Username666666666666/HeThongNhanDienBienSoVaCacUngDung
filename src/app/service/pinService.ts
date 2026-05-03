@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase.ts";
+import { validateEmail, validatePIN, validateOTP, ValidationResult } from "../utils/validation.ts";
 
 export type PinResetRequest = {
   id: string;
@@ -35,8 +36,13 @@ export const generatePin = (): string => {
 };
 
 export const hashPin = async (pin: string): Promise<string> => {
+  const validation = validatePIN(pin);
+  if (!validation.isValid) {
+    throw new Error(validation.error);
+  }
+
   const encoder = new TextEncoder();
-  const data = encoder.encode(pin);
+  const data = encoder.encode(validation.sanitizedValue!);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
 
   return Array.from(new Uint8Array(hashBuffer))
@@ -53,12 +59,15 @@ export const comparePin = async (
 };
 
 export const getUserByEmail = async (email: string): Promise<UserRow | null> => {
-  const normalized = normalizeEmail(email);
+  const validation = validateEmail(email);
+  if (!validation.isValid) {
+    throw new Error(validation.error);
+  }
 
   const { data, error } = await supabase
     .from("nguoidung")
     .select("manguoidung, email, chucnang")
-    .ilike("email", normalized)
+    .ilike("email", validation.sanitizedValue!)
     .maybeSingle();
 
   if (error) throw error;
@@ -182,12 +191,12 @@ export const changeUserPinWithOldPin = async (
 };
 
 export const sendPinResetOtp = async (email: string): Promise<boolean> => {
-  const normalized = normalizeEmail(email);
-  if (!normalized) {
-    throw new Error("Email không hợp lệ");
+  const validation = validateEmail(email);
+  if (!validation.isValid) {
+    throw new Error(validation.error);
   }
 
-  const user = await getUserByEmail(normalized);
+  const user = await getUserByEmail(validation.sanitizedValue!);
   if (!user) {
     throw new Error("Không tìm thấy tài khoản theo email này");
   }
@@ -218,11 +227,19 @@ export const verifyPinOtp = async (
   email: string,
   otp: string
 ): Promise<PinResetRequest | null> => {
-  const normalized = normalizeEmail(email);
+  const emailValidation = validateEmail(email);
+  if (!emailValidation.isValid) {
+    throw new Error(emailValidation.error);
+  }
+
+  const otpValidation = validateOTP(otp);
+  if (!otpValidation.isValid) {
+    throw new Error(otpValidation.error);
+  }
 
   const { error } = await supabase.auth.verifyOtp({
-    email: normalized,
-    token: otp.trim(),
+    email: emailValidation.sanitizedValue!,
+    token: otpValidation.sanitizedValue!,
     type: "recovery",
   });
 
@@ -233,7 +250,7 @@ export const verifyPinOtp = async (
     .select(
       "id,email,vai_tro,manguoidung,ma_otp_da_bam,het_han_luc,da_su_dung,so_lan_thu,thoi_diem_tao"
     )
-    .eq("email", normalized)
+    .eq("email", emailValidation.sanitizedValue!)
     .eq("da_su_dung", false)
     .order("thoi_diem_tao", { ascending: false })
     .limit(1)
