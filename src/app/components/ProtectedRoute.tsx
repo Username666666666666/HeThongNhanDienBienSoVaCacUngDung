@@ -69,12 +69,25 @@ const role = rawRole ? rawRole.trim().toLowerCase() : null;
 // 🔥 1. CHẶN ĐI LẠC BASE URL (Ngăn support kẹt trong route /supervisor)
 const currentPath = window.location.pathname;
 if (role) {
-  const otherRoles = ['admin', 'support', 'owner', 'provider', 'supervisor'].filter(r => r !== role);
-  // Nếu URL đang bắt đầu bằng /support mà role lại là supervisor -> Đá về /supervisor
-  const isWandering = otherRoles.some(r => currentPath.startsWith(`/${r}`));
-  if (isWandering) {
-    console.log(`🚨 Kẹt URL! Trả về đúng trang của ${role}`);
-    window.location.href = `/${role}`; // Dùng window.location để ép tải lại toàn bộ state và AuthContext
+  // Định nghĩa các khu vực mà mỗi role được phép đi vào
+  const allowedBasePaths: Record<string, string[]> = {
+    'owner': ['/owner'],
+    'support': ['/support', '/owner'], // Support được vào trang của support VÀ owner
+    'supervisor': ['/supervisor', '/owner'], // Supervisor được vào trang của supervisor VÀ owner
+    'admin': ['/admin'],
+    'provider': ['/provider'],
+  };
+
+  const roleAllowedPaths = allowedBasePaths[role] || [];
+  const protectedPrefixes = ['/owner', '/support', '/supervisor', '/admin', '/provider'];
+
+  // Xem URL hiện tại thuộc khu vực quản lý của ai
+  const currentPrefix = protectedPrefixes.find(prefix => currentPath.startsWith(prefix));
+
+  // Nếu URL hiện tại nằm trong vùng cấm, và role này không được cấp quyền vào vùng đó -> ĐÁ VĂNG
+  if (currentPrefix && !roleAllowedPaths.includes(currentPrefix)) {
+    console.log(`🚨 Chặn truy cập! Role '${role}' không được phép vào khu vực '${currentPrefix}'`);
+    window.location.href = `/${role}`; // Ép reload về trang gốc của role đó
     return;
   }
 }
