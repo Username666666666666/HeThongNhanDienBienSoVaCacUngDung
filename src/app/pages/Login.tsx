@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Chrome, Facebook, Eye, EyeOff, Car } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../utils/supabase.ts';
+import { useAuthForm } from '../hooks/useAuthForm';
 
 export const Login = () => {
   const navigate = useNavigate();
+  const { errors, validateEmail, validatePassword, clearErrors } = useAuthForm();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,12 +17,8 @@ export const Login = () => {
   // 🔐 ĐĂNG NHẬP EMAIL/PASSWORD
 const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // 🔍 Biểu thức chính quy kiểm tra định dạng email tổng quát
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!emailRegex.test(email)) {
-      toast.error('Vui lòng nhập đúng định dạng email (ví dụ: user@domain.com)');
+    if (!validateEmail(email) || !validatePassword(password)) {
       return;
     }
 
