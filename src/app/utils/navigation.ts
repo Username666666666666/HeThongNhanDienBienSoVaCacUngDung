@@ -5,8 +5,6 @@ export const getHomeRoute = (role: UserRole | undefined): string => {
   if (!role) return '/login';
   
   switch (role) {
-    case 'super_admin':
-      return '/super-admin';
     case 'admin':
       return '/admin';
     case 'supervisor':
@@ -15,6 +13,8 @@ export const getHomeRoute = (role: UserRole | undefined): string => {
       return '/support';
     case 'owner':
       return '/owner';
+    case 'provider':
+      return '/provider';
     default:
       return '/login';
   }

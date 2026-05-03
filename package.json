@@ -10,8 +10,6 @@
   "dependencies": {
     "@emotion/react": "11.14.0",
     "@emotion/styled": "11.14.1",
-    "@mui/icons-material": "7.3.5",
-    "@mui/material": "7.3.5",
     "@popperjs/core": "2.11.8",
     "@radix-ui/react-accordion": "1.2.3",
     "@radix-ui/react-alert-dialog": "1.1.6",
@@ -40,6 +38,8 @@
     "@radix-ui/react-toggle-group": "1.1.2",
     "@radix-ui/react-tooltip": "1.1.8",
     "@supabase/supabase-js": "^2.103.3",
+    "@tanstack/react-query": "^5.100.6",
+    "bcryptjs": "^3.0.3",
     "canvas-confetti": "1.9.4",
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
@@ -64,7 +64,8 @@
     "sonner": "2.0.3",
     "tailwind-merge": "3.2.0",
     "tw-animate-css": "1.3.8",
-    "vaul": "1.1.2"
+    "vaul": "1.1.2",
+    "zod": "^4.4.1"
   },
   "devDependencies": {
     "@gradio/client": "^2.2.0",

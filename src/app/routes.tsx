@@ -1,5 +1,5 @@
 import { createBrowserRouter, Navigate } from "react-router-dom";
-import { ReactNode } from "react";
+import { ReactNode, Suspense, lazy } from "react";
 
 import { Login } from "./pages/Login.tsx";
 import { ForgotPassword } from "./pages/ForgotPassword.tsx";
@@ -34,7 +34,7 @@ import { SupervisorProfile } from "./pages/supervisor/SupervisorProfile.tsx";
 import { SupportStaffDashboard } from "./pages/support/SupportStaffDashboard.tsx";
 import { SupportProfile } from './pages/support/SupportProfile.tsx';
 
-import { AdminDashboard } from "./pages/admin/AdminDashboard.tsx";
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard.tsx").then(module => ({ default: module.AdminDashboard })));
 import { ParkingLotConfig } from "./pages/admin/ParkingLotConfig.tsx";
 import { Statistics } from "./pages/admin/Statistics.tsx";
 import { ServiceSubscription } from "./pages/admin/ServiceSubscription.tsx";
