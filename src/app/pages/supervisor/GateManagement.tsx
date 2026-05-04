@@ -1488,7 +1488,7 @@ const handleFinishParkingTime = async () => {
         checked={onlyReservedSpots}
         onChange={(e) => setOnlyReservedSpots(e.target.checked)}
       />
-      <span>Chỉ hiện vị trí trạng thái 2</span>
+      <span>Chỉ hiện vị trí đặt chỗ trước</span>
     </label>
   </div>
 </div>

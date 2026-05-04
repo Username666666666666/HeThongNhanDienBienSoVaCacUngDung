@@ -1228,7 +1228,7 @@ const GatePanel = ({
               <div className="mt-5 flex justify-end">
                 <label className="inline-flex items-center gap-2 text-sm text-gray-700">
                   <input type="checkbox" checked={onlyReservedSpots} onChange={(e) => setOnlyReservedSpots(e.target.checked)} />
-                  <span>Chỉ hiện vị trí trạng thái 2</span>
+                  <span>Chỉ hiện vị trí đặt chỗ trước</span>
                 </label>
               </div>
             </div>
