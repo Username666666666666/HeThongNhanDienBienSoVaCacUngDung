@@ -1,1125 +1,720 @@
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import {
-  ArrowLeft,
-  MapPin,
-  Star,
-  Clock,
-  DollarSign,
-  Phone,
-  Navigation,
-  Eye,
-  Car,
-  Bike,
-  Truck,
-  Shield,
-  Camera,
-  Wifi,
-  AlertCircle,
-  ChevronLeft,
-  ChevronRight,
+  ArrowLeft, MapPin, Star, Clock, DollarSign, Phone, Navigation,
+  Car, Bike, Shield, Camera, Wifi, AlertCircle, X, Info, CreditCard,
+  CheckCircle, Map
 } from 'lucide-react';
-import { ImageWithFallback } from '../../components/figma/ImageWithFallback.tsx';
 import { supabase } from '../../utils/supabase.ts';
 import { useAuth } from '../../context/AuthContext.tsx';
 import { toast } from 'sonner';
 
-type PriceType = 'fixed' | 'second' | 'minute' | 'hourly' | 'daily';
-type SpotStatusType = 0 | 1 | 2 | number | string;
+// ================= TYPES =================
+interface ParkingPricing {
+  mabanggia: string;
+  ten_goi_gia: string;
+  kieuxe: 'car' | 'motorcycle';
+  phut_an_han: number;
+  phut_block_dau: number;
+  gia_block_dau: number;
+  phut_block_tiep: number;
+  gia_block_tiep: number;
+  phu_phi_dem: number;
+  gio_bat_dau_dem: string;
+  gio_ket_thuc_dem: string;
+  phi_toi_da_ngay: number;
+  thoi_gian_toi_da_ngay: number;
+}
 
-interface ParkingLotView {
-  id: string | number;
+interface ParkingZone {
+  makhuvuc: string;
+  tenkhuvuc: string;
+  mota: string;
+  hinhkhuvuc: string;
+  is_vip: boolean;
+  succhua_toida: number;
+  han_muc_dat_truoc: number;
+  mabanggia: string | null;
+  cho_dang_su_dung: number; 
+  cho_vip_dang_dat: number;
+  availableSpots: number; 
+  slotDatTruocKhaDung: number;
+}
+
+interface SubscriptionCard {
+  mathe: string;
+  loaithe: string;
+  loaixe: string;
+  gia_tien: number;
+}
+
+interface ParkingLotInfo {
+  id: string;
   name: string;
   communityCode: string;
   address: string;
   phone: string;
   rating: number;
   reviews: number;
-  slots: number;
-  totalSlots: number;
   image: string;
   openingHours: string;
   description: string;
 }
 
-interface ParkingSpotView {
-  mavitri: string | number;
-  tenvitri: string;
-  trangthai: SpotStatusType;
-  mabanggia: string | number | null;
-  raw: any;
-}
-
-interface ParkingZoneView {
-  makhuvuc: string | number;
-  tenkhuvuc: string;
-  hinhkhuvuc: string;
-  mota: string;
-  spots: ParkingSpotView[];
-  supportedPricingIds: string[];
-}
-
-interface ParkingPricingView {
-  mabanggia: string | number;
-  type: string;
-  priceType: PriceType;
-  price: number;
-  coinPrice: number;
-  isVirtualCoin: boolean;
-  vehicleType: 'car' | 'motorcycle'; // 👈 thêm dòng này
-}
-
-interface FacilityView {
-  id: string | number;
-  name: string;
-  iconKey: string;
-}
-
 const customerReviews = [
-  {
-    id: 1,
-    name: 'Nguyễn Văn A',
-    rating: 5,
-    comment: 'Bãi xe rộng rãi, nhân viên thân thiện. Giá cả hợp lý!',
-    date: '25/03/2026',
-  },
-  {
-    id: 2,
-    name: 'Trần Thị B',
-    rating: 4,
-    comment: 'Vị trí thuận tiện, dễ tìm. Chỉ có điều đôi khi hơi đông.',
-    date: '22/03/2026',
-  },
-  {
-    id: 3,
-    name: 'Lê Văn C',
-    rating: 5,
-    comment: 'An toàn, có camera giám sát tốt. Rất hài lòng!',
-    date: '20/03/2026',
-  },
+  { id: 1, name: 'Nguyễn Văn A', rating: 5, comment: 'Bãi xe rộng rãi, camera AI nhận diện biển số rất nhanh!', date: '25/03/2026' },
+  { id: 2, name: 'Trần Thị B', rating: 4, comment: 'Khu VIP đặt chỗ trước rất tiện, không sợ hết chỗ giờ cao điểm.', date: '22/03/2026' },
 ];
 
-const statusMeta = {
-  available: { label: 'Trống', bg: 'bg-green-100', border: 'border-green-400', text: 'text-green-700' },
-  booked: { label: 'Đã đặt', bg: 'bg-red-100', border: 'border-red-400', text: 'text-red-700' },
-  reserved: { label: 'Đã giữ', bg: 'bg-yellow-100', border: 'border-yellow-400', text: 'text-yellow-700' },
-  unknown: { label: 'Không rõ', bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-700' },
-} as const;
-
-const formatMoney = (value: number | string | null | undefined) => {
-  const n = Number(value ?? 0);
-  if (Number.isNaN(n)) return '0';
-  return n.toLocaleString('vi-VN');
-};
-
-const resolveFacilityIconKey = (name: string) => {
+const resolveFacilityIcon = (name: string) => {
   const text = name.toLowerCase();
-
-  if (text.includes('camera')) return 'camera';
-  if (text.includes('wifi') || text.includes('internet')) return 'wifi';
-  if (text.includes('bảo vệ') || text.includes('an ninh') || text.includes('shield')) return 'shield';
-  if (text.includes('mái che') || text.includes('che')) return 'alert';
-  if (text.includes('điện') || text.includes('sạc')) return 'car';
-  if (text.includes('xe máy') || text.includes('motor')) return 'bike';
-  if (text.includes('tải') || text.includes('truck')) return 'truck';
-  return 'alert';
+  if (text.includes('camera')) return Camera;
+  if (text.includes('wifi') || text.includes('internet')) return Wifi;
+  if (text.includes('bảo vệ') || text.includes('an ninh')) return Shield;
+  return CheckCircle;
 };
 
-const resolveFacilityIcon = (iconKey: string) => {
-  switch (iconKey) {
-    case 'camera':
-      return Camera;
-    case 'wifi':
-      return Wifi;
-    case 'shield':
-      return Shield;
-    case 'car':
-      return Car;
-    case 'bike':
-      return Bike;
-    case 'truck':
-      return Truck;
-    default:
-      return AlertCircle;
-  }
-};
-
-const statusToParkingStatus = (value: SpotStatusType) => {
-  const n = Number(value);
-  if (n === 1) return 'booked';
-  if (n === 2) return 'reserved';
-  return 'available';
-};
-
-const formatPriceDisplay = (item: ParkingPricingView) => {
-  const basePrice = `${formatMoney(item.price)}đ`;
-  const coinPart = item.isVirtualCoin ? ` · ${formatMoney(item.coinPrice)} xu` : '';
-
-if (item.priceType === 'second') return `${basePrice}/giây${coinPart}`;
-if (item.priceType === 'minute') return `${basePrice}/phút${coinPart}`;
-if (item.priceType === 'hourly') return `${basePrice}/giờ${coinPart}`;
-if (item.priceType === 'daily') return `${basePrice}/ngày${coinPart}`;
-return `${basePrice}${coinPart}`;
-};
-
+// ================= COMPONENT CHÍNH =================
 export const ParkingLotDetails = () => {
   const navigate = useNavigate();
   const { id } = useParams();
-const { user } = useAuth();
-const role = (user?.role || '').toLowerCase();
-const canManageParking = ['owner', 'support', 'supervisor'].includes(role);
-  const [showMapModal, setShowMapModal] = useState(false);
+  const { user } = useAuth();
+
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [parkingLot, setParkingLot] = useState<ParkingLotView | null>(null);
-  const [zones, setZones] = useState<ParkingZoneView[]>([]);
-  const [pricing, setPricing] = useState<ParkingPricingView[]>([]);
-  const [facilities, setFacilities] = useState<FacilityView[]>([]);
+  const [parkingLot, setParkingLot] = useState<ParkingLotInfo | null>(null);
+  const [zones, setZones] = useState<ParkingZone[]>([]);
+  const [pricingList, setPricingList] = useState<ParkingPricing[]>([]);
+  const [cards, setCards] = useState<SubscriptionCard[]>([]);
+  const [facilities, setFacilities] = useState<any[]>([]);
 
-  const [activeModalZoneId, setActiveModalZoneId] = useState<string | number | null>(null);
-  const [activeModalSpotIndex, setActiveModalSpotIndex] = useState(0);
+  const [activeZoneId, setActiveZoneId] = useState<string>('');
 
-const handleJoinCommunity = async () => {
-  try {
+  // Modals & Payment State
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [bookingBlocks, setBookingBlocks] = useState(2);
+  const [showQRModal, setShowQRModal] = useState<{ amount: number; desc: string; type: string; mathe?: string } | null>(null);
+  
+
+
+  // State mới cho luồng PayOS
+  const [currentOrderCode, setCurrentOrderCode] = useState<number | null>(null);
+  const [payosQrData, setPayosQrData] = useState<any>(null);
+  const [isProcessingQR, setIsProcessingQR] = useState(false);
+  const [paymentSuccess, setPaymentSuccess] = useState(false); // Trạng thái hiện hiệu ứng xanh
+
+  // ================= LẮNG NGHE REALTIME =================
+  useEffect(() => {
+    if (!currentOrderCode) return;
+
+    const channel = supabase.channel(`payment_status_${currentOrderCode}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'giaodich_cho', filter: `order_code=eq.${currentOrderCode}` },
+        (payload) => {
+          if (payload.new.trangthai === 'SUCCESS') {
+            setPaymentSuccess(true); // Bật hiệu ứng thành công
+            toast.success('Thanh toán thành công! Dịch vụ đã được kích hoạt.');
+            
+            // Đợi 2.5 giây cho khách xem chữ Thành Công rồi mới tắt
+            setTimeout(() => {
+              setShowBookingModal(false);
+              setShowQRModal(null);
+              setCurrentOrderCode(null);
+              setPayosQrData(null);
+              setPaymentSuccess(false);
+            }, 2500);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentOrderCode]);
+
+  // ================= FETCH DATA =================
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const lotId = String(id ?? '').trim();
+        if (!lotId) throw new Error('Thiếu mã bãi đỗ.');
+
+        const { data: lotData, error: lotErr } = await supabase.from('baido').select('*').eq('mabaido', lotId).maybeSingle();
+        if (lotErr || !lotData) throw new Error('Không tìm thấy bãi đỗ.');
+
+        const { data: zoneData } = await supabase.from('khuvucdo1').select('*').eq('mabaido', lotId);
+        const { data: priceData } = await supabase.from('banggia1').select('*').eq('mabaido', lotId);
+        const { data: cardData } = await supabase.from('the_thang_quy').select('*').eq('mabaido', lotId);
+        const { data: facilityData } = await supabase.from('tienich').select('*').eq('mabaido', lotId);
+
+        setParkingLot({
+          id: lotData.mabaido,
+          name: lotData.tenbaido,
+          communityCode: lotData.mathamgia,
+          address: lotData.diachi,
+          phone: lotData.sodienthoai,
+          rating: 4.8,
+          reviews: 124,
+          image: lotData.hinhanh || 'https://images.unsplash.com/photo-1506521781263-d8422e82f27a?w=1200',
+          openingHours: lotData.giohoatdong || '24/7',
+          description: lotData.mota || 'Bãi đỗ xe thông minh ứng dụng AI LPR nhận diện biển số.',
+        });
+
+        const mappedZones: ParkingZone[] = (zoneData || []).map(z => {
+          const sucChua = Number(z.succhua_toida || 0);
+          const dangSuDung = Number(z.cho_dang_su_dung || 0);
+          const dangDat = Number(z.cho_vip_dang_dat || 0);
+          const hanMuc = Number(z.han_muc_dat_truoc || 0);
+
+          return {
+            ...z,
+            succhua_toida: sucChua,
+            cho_dang_su_dung: dangSuDung,
+            cho_vip_dang_dat: dangDat,
+            availableSpots: Math.max(0, sucChua - dangSuDung), 
+            slotDatTruocKhaDung: Math.max(0, hanMuc - dangDat) 
+          };
+        });
+        
+        setZones(mappedZones);
+        if (mappedZones.length > 0) setActiveZoneId(mappedZones[0]!.makhuvuc);
+
+        setPricingList(priceData || []);
+        setCards(cardData || []);
+        setFacilities(facilityData || []);
+
+      } catch (err: any) {
+        setLoadError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [id]);
+
+  const handleJoinCommunity = async () => {
     if (!user) {
       toast.error('Bạn chưa đăng nhập!');
       return;
     }
+    toast.success('Đã tham gia cộng đồng!');
+    navigate(`/community/feed?code=${parkingLot?.communityCode}`);
+  };
 
-    const currentUserId = (user as any)?.manguoidung ?? (user as any)?.id;
-    if (!currentUserId) {
-      toast.error('Không tìm thấy mã người dùng!');
+  const activeZone = zones.find(z => z.makhuvuc === activeZoneId) || zones[0];
+  const activePricing = pricingList.find(p => p.mabanggia === activeZone?.mabanggia) || pricingList[0];
+  const totalCapacity = zones.reduce((sum, z) => sum + z.succhua_toida, 0);
+  const totalAvailable = zones.reduce((sum, z) => sum + z.availableSpots, 0);
+
+  const calculateBooking = () => {
+    if (!activePricing) return { mins: 0, price: 0, fee: 0, total: 0 };
+    const reservationFee = 15000; 
+    const parkingTime = activePricing.phut_block_dau + (bookingBlocks * activePricing.phut_block_tiep);
+    const parkingPrice = activePricing.gia_block_dau + (bookingBlocks * activePricing.gia_block_tiep);
+    return {
+      mins: parkingTime,
+      price: parkingPrice,
+      fee: reservationFee,
+      total: parkingPrice + reservationFee
+    };
+  };
+  const bookingInfo = calculateBooking();
+
+ 
+// ================= TẠO GIAO DỊCH CHUẨN =================
+// ================= TẠO GIAO DỊCH =================
+  const handleInitiatePayment = async (type: 'BOOKING' | 'CARD', amount: number, mathe?: string) => {
+    if (!user) {
+      toast.error('Vui lòng đăng nhập để thực hiện thanh toán.');
       return;
     }
 
-    if (!parkingLot?.communityCode) {
-      toast.error('Bãi đỗ này chưa có mã cộng đồng!');
-      return;
+    setIsProcessingQR(true);
+
+    // 1. RÀNG BUỘC: CHẶN MUA NHIỀU THẺ NẾU ĐANG CÓ THẺ HOẠT ĐỘNG TẠI BÃI NÀY
+    if (type === 'CARD') {
+      const { data: activeCards } = await supabase
+        .from('bangthedaihan')
+        .select('id')
+        .eq('manguoidung', user.id)
+        .eq('mabaido', parkingLot?.id)
+        .eq('trangthai', 'ACTIVE')
+        .gte('ngay_het_han', new Date().toISOString());
+
+      if (activeCards && activeCards.length > 0) {
+        toast.error('Quý khách cần hủy thẻ đang hoạt động hiện tại trước khi đăng ký thẻ mới!');
+        setIsProcessingQR(false);
+        return;
+      }
     }
 
-    const { data: baidoRow, error: baidoError } = await supabase
-      .from('baido')
-      .select('mabaido, mathamgia, tenbaido')
-      .eq('mabaido', parkingLot.id)
+    // 1.5. CHẶN ĐẶT CHỖ NẾU ĐANG CÓ ĐẶT CHỖ HOẠT ĐỘNG
+    if (type === 'BOOKING') {
+      const { data: activeBookings } = await supabase
+        .from('bangdatchotruoc1')
+        .select('id')
+        .eq('manguoidung', user.id)
+        .eq('mabaido', parkingLot?.id)
+        .eq('trangthai', 'DA_THANH_TOAN')
+        .gte('ngay_het_han', new Date().toISOString());
+
+      if (activeBookings && activeBookings.length > 0) {
+        toast.error('Bạn đang có một dịch vụ đặt chỗ trước chưa sử dụng tại bãi này. Vui lòng hoàn thành hoặc chờ hết hạn!');
+        setIsProcessingQR(false);
+        return;
+      }
+    }
+
+    // 2. CHỐNG SPAM DB: TÌM VÀ XÓA GIAO DỊCH PENDING CŨ (BẮT BUỘC ĐỂ PAYOS KHÔNG LỖI TRÙNG MÃ)
+    const colCheck = type === 'CARD' ? 'mathe' : 'makhuvuc';
+    const valCheck = type === 'CARD' ? mathe : activeZone?.makhuvuc;
+
+    const { data: pendingTx } = await supabase
+      .from('giaodich_cho')
+      .select('order_code')
+      .eq('manguoidung', user.id)
+      .eq('mabaido', parkingLot?.id)
+      .eq('loai_giaodich', type)
+      .eq('trangthai', 'PENDING')
+      .eq(colCheck, valCheck)
       .maybeSingle();
 
-    if (baidoError) {
-      console.error('BAIDO ERROR:', baidoError);
-      toast.error('Không thể kiểm tra bãi đỗ!');
-      return;
+    if (pendingTx) {
+      await supabase.from('giaodich_cho').delete().eq('order_code', pendingTx.order_code);
     }
 
-    if (!baidoRow) {
-      toast.error('Không tìm thấy bãi đỗ!');
-      return;
+    // 3. LUÔN TẠO MÃ ĐƠN MỚI 100% CHO PAYOS
+    const newOrderCode = Number(String(Date.now()).slice(-6) + Math.floor(Math.random() * 10));
+    setCurrentOrderCode(newOrderCode);
+
+    if (type === 'BOOKING') {
+      setShowBookingModal(true);
+    } else {
+      setShowQRModal({ amount, desc: `Thẻ Dài Hạn`, type: 'Thẻ Dài Hạn', mathe });
     }
 
-    const { error: insertError } = await supabase
-      .from('thanhviencongdong')
-      .upsert(
-        {
-          mabaido: baidoRow.mabaido,
-          manguoidung: currentUserId,
-        },
-        {
-          onConflict: 'mabaido,manguoidung',
-        }
-      );
-
-    if (insertError) {
-      console.error('THANHVIENCONGDONG ERROR:', insertError);
-      toast.error('Không thể thêm bạn vào cộng đồng!');
-      return;
-    }
-
-    toast.success('Đã tham gia cộng đồng!');
-    navigate(`/community/feed?code=${encodeURIComponent(parkingLot.communityCode)}`);
-  } catch (error) {
-    console.error('JOIN COMMUNITY ERROR:', error);
-    toast.error('Có lỗi khi tham gia cộng đồng!');
-  }
-};
-
-  const loadParkingLot = async () => {
-    try {
-      setLoading(true);
-      setLoadError(null);
-
-   const rawId = String(id ?? '').trim();
-if (!rawId) {
-  setLoadError('Thiếu mã bãi đỗ.');
-  return;
-}
-
-const { data: lotData, error: lotErr } = await supabase
-  .from('baido')
-  .select('*')
-  .eq('mabaido', rawId)
-  .maybeSingle();
-
-if (lotErr) throw lotErr;
-
-if (!lotData) {
-  setLoadError('Không tìm thấy bãi đỗ.');
-  return;
-}
-
-const lot = lotData as any;
-const lotId = String(lot.mabaido ?? rawId);
-
-      const { data: zoneRows, error: zoneErr } = await supabase
-        .from('khuvudo')
-        .select('*')
-        .eq('mabaido', lotId)
-        .order('makhuvuc', { ascending: true });
-
-      if (zoneErr) throw zoneErr;
-
-      const zoneIds = (zoneRows ?? []).map((z: any) => z.makhuvuc);
-
-      const { data: spotRows, error: spotErr } = zoneIds.length
-        ? await supabase.from('vitrido').select('*').in('makhuvuc', zoneIds)
-        : { data: [], error: null as any };
-
-      if (spotErr) throw spotErr;
-
-      const { data: pricingRows, error: pricingErr } = await supabase
-        .from('banggia')
-        .select('*')
-        .eq('mabaido', lotId)
-        .order('mabanggia', { ascending: true });
-
-      if (pricingErr) throw pricingErr;
-
-      const pricingIds = (pricingRows ?? []).map((p: any) => p.mabanggia);
-
-      const { data: coinRows } = pricingIds.length
-        ? await supabase.from('banggiaxuao').select('*').in('mabanggia', pricingIds)
-        : { data: [] as any[] };
-
-      const coinMap = new Map<string, number>();
-      (coinRows ?? []).forEach((row: any) => {
-        coinMap.set(String(row.mabanggia), Number(row.thanhxu ?? 0));
-      });
-
-      const { data: supportRows } = zoneIds.length
-        ? await supabase.from('phuongtienhotro').select('*').in('makhuvuc', zoneIds)
-        : { data: [] as any[] };
-
-      const pricingMap = new Map<string, any>();
-      (pricingRows ?? []).forEach((row: any) => {
-        pricingMap.set(String(row.mabanggia), row);
-      });
-
-    const supportedByZone = new Map<string, string[]>();
-
-(supportRows ?? []).forEach((row: any) => {
-  const zoneKey = String(row.makhuvuc);
-  const pricingId = String(row.mabanggia);
-
-  const current = supportedByZone.get(zoneKey) ?? [];
-  if (!current.includes(pricingId)) {
-    current.push(pricingId);
-  }
-  supportedByZone.set(zoneKey, current);
-});
-
-      const zoneSpotMap = new Map<string, ParkingSpotView[]>();
-      (spotRows ?? []).forEach((row: any) => {
-        const key = String(row.makhuvuc);
-        const current = zoneSpotMap.get(key) ?? [];
-      current.push({
-  mavitri: row.mavitri ?? row.id ?? `${key}-${current.length + 1}`,
-  tenvitri: row.tenvitri ?? row.ten ?? `Vị trí ${current.length + 1}`,
-  trangthai: row.trangthai ?? 0,
-  mabanggia: row.mabanggia ?? null,
-  raw: row,
-});
-        zoneSpotMap.set(key, current);
-      });
-
-   const transformedZones: ParkingZoneView[] = (zoneRows ?? []).map((zone: any) => {
-  const zoneKey = String(zone.makhuvuc);
-  const spots = zoneSpotMap.get(zoneKey) ?? [];
-
-  return {
-    makhuvuc: zone.makhuvuc,
-    tenkhuvuc: zone.tenkhuvuc ?? zone.ten ?? `Khu vực ${zoneKey}`,
-    hinhkhuvuc: zone.hinhkhuvuc ?? zone.image ?? '',
-    mota: zone.mota ?? '',
-    spots,
-    supportedPricingIds: supportedByZone.get(zoneKey) ?? [],
-  };
-});
-
-      const totalSlots = transformedZones.reduce((sum, zone) => sum + zone.spots.length, 0);
-      const availableSlots = transformedZones.reduce(
-        (sum, zone) => sum + zone.spots.filter((spot) => Number(spot.trangthai) === 0).length,
-        0,
-      );
-
-    const transformedPricing: ParkingPricingView[] = (pricingRows ?? []).map((row: any) => ({
-  mabanggia: row.mabanggia,
-  type: row.loaixe ?? row.type ?? 'Không rõ',
-  priceType: (row.loaigia ?? 'fixed') as PriceType,
-  price: Number(row.thanhtien ?? row.price ?? 0),
-  coinPrice: Number(coinMap.get(String(row.mabanggia)) ?? row.giaxu ?? 0),
-  isVirtualCoin: Boolean(row.thanhtoanxuao),
-
-  vehicleType: row.kieuxe === 'motorcycle' ? 'motorcycle' : 'car', // 👈 thêm dòng này
-}));
-
-  const { data: facilityRows, error: facilityErr } = await supabase
-  .from('tienich')
-  .select('*')
-  .eq('mabaido', lotId);
-
-const transformedFacilities: FacilityView[] = [];
-
-if (!facilityErr && facilityRows) {
-  facilityRows.forEach((row: any) => {
-    const name = row.ten_tien_ich;
-
-    if (!name) return;
-
-    transformedFacilities.push({
-      id: row.matienich,
-      name,
-      iconKey: resolveFacilityIconKey(name),
-    });
-  });
-}
-
-      setParkingLot({
-        id: lotId,
-        name: lot.tenbaido ?? lot.name ?? 'Bãi đỗ xe',
-        communityCode: lot.mathamgia ?? lot.communityCode ?? '',
-        address: lot.diachi ?? lot.address ?? '',
-        phone: lot.sodienthoai ?? lot.phone ?? '',
-        rating: Number(lot.danhgia_trungbinh ?? lot.rating ?? 0),
-        reviews: Number(lot.soluotdanhgia ?? lot.reviews ?? 0),
-        slots: availableSlots,
-        totalSlots,
-        image: lot.hinhanh ?? lot.image ?? '',
-        openingHours: lot.giohoatdong ?? lot.operatingHours ?? '24/7',
-        description: lot.mota ?? lot.description ?? '',
-      });
-
-      setZones(transformedZones);
-      setPricing(transformedPricing);
-      setFacilities(transformedFacilities);
-
-      if (transformedZones.length > 0) {
-        setActiveModalZoneId(transformedZones[0].makhuvuc);
-        setActiveModalSpotIndex(0);
+    // 4. GỌI LÊN PAYOS KÈM THÊM `mins` ĐỂ DB TÍNH GIỜ
+    const { data: payosRes, error: payosErr } = await supabase.functions.invoke('create-payos-link', {
+      body: { 
+        orderCode: newOrderCode, 
+        amount: amount, 
+        description: `Thanh toan ${newOrderCode}`, 
+        userId: user.id, 
+        lotId: parkingLot?.id, 
+        type: type, 
+        zoneId: activeZone?.makhuvuc || null, 
+        mathe: mathe || null,
+        mins: type === 'BOOKING' ? bookingInfo.mins : 0 // TRUYỀN PHÚT QUA ĐÂY
       }
-    } catch (error: any) {
-      setLoadError(error?.message ?? 'Lỗi tải dữ liệu.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadParkingLot();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id]);
-
-  const zoneSummaries = useMemo(() => {
-    return zones.map((zone) => {
-      const total = zone.spots.length;
-      const available = zone.spots.filter((spot) => Number(spot.trangthai) === 0).length;
-      const booked = zone.spots.filter((spot) => Number(spot.trangthai) === 1).length;
-      const reserved = zone.spots.filter((spot) => Number(spot.trangthai) === 2).length;
-
-      return {
-        ...zone,
-        total,
-        available,
-        booked,
-        reserved,
-      };
     });
-  }, [zones]);
 
-  const activeZoneSummary = useMemo(() => {
-    if (!zoneSummaries.length) return null;
-    return (
-      zoneSummaries.find((zone) => String(zone.makhuvuc) === String(activeModalZoneId)) ?? zoneSummaries[0]
-    );
-  }, [zoneSummaries, activeModalZoneId]);
-
-  const activeSpot = useMemo(() => {
-    if (!activeZoneSummary?.spots.length) return null;
-    return activeZoneSummary.spots[activeModalSpotIndex] ?? activeZoneSummary.spots[0] ?? null;
-  }, [activeZoneSummary, activeModalSpotIndex]);
-const pricingMap = useMemo(() => {
-  const map = new Map<string, ParkingPricingView>();
-  pricing.forEach((p) => map.set(String(p.mabanggia), p));
-  return map;
-}, [pricing]);
-
-const getSpotVehicleLabel = (spot: ParkingSpotView) => {
-  if (!spot.mabanggia) return '';
-  return pricingMap.get(String(spot.mabanggia))?.type ?? '';
-};
-  useEffect(() => {
-    if (!activeZoneSummary) return;
-    if (activeModalSpotIndex >= activeZoneSummary.spots.length) {
-      setActiveModalSpotIndex(0);
+    // 5. NẾU BỊ CORS HOẶC PAYOS BÁO LỖI -> HỦY GIAO DỊCH TRONG DB, BÁO LỖI VÀ ĐÓNG MODAL
+    if (payosErr || !payosRes || payosRes.code !== "00") {
+      toast.error('Không thể kết nối tới máy chủ thanh toán. Vui lòng thử lại sau!');
+      // Rollback: Xóa mẹ cái dòng PENDING vừa tạo ở trên hàm create-payos-link
+      await supabase.from('giaodich_cho').delete().eq('order_code', newOrderCode);
+      
+      setShowBookingModal(false);
+      setShowQRModal(null);
+      setIsProcessingQR(false);
+      return;
     }
-  }, [activeModalSpotIndex, activeZoneSummary]);
 
-  const previewSpots = useMemo(() => {
-  return zoneSummaries.flatMap((zone) => zone.spots);
-}, [zoneSummaries]);
-
-  const sortedPricing = useMemo(() => {
-    const typeOrder: Record<PriceType, number> = {
-  fixed: 0,
-  second: 1,
-  minute: 2,
-  hourly: 3,
-  daily: 4,
-};
-    return [...pricing].sort((a, b) => {
-      const diff = typeOrder[a.priceType] - typeOrder[b.priceType];
-      if (diff !== 0) return diff;
-      return String(a.type).localeCompare(String(b.type), 'vi');
+    // 6. NẾU THÀNH CÔNG -> LẤY DATA CHUẨN CỦA PAYOS ĐỂ VẼ QR
+    setPayosQrData({
+      bin: payosRes.data.bin, 
+      accountNo: payosRes.data.accountNumber, 
+      amount: payosRes.data.amount, 
+      description: payosRes.data.description 
     });
-  }, [pricing]);
-
-  const jumpZone = (direction: 'prev' | 'next') => {
-    if (!zoneSummaries.length) return;
-
-    const currentIndex = Math.max(
-      0,
-      zoneSummaries.findIndex((zone) => String(zone.makhuvuc) === String(activeModalZoneId)),
-    );
-
-    const nextIndex =
-      direction === 'next'
-        ? (currentIndex + 1) % zoneSummaries.length
-        : (currentIndex - 1 + zoneSummaries.length) % zoneSummaries.length;
-
-    const nextZone = zoneSummaries[nextIndex];
-    setActiveModalZoneId(nextZone.makhuvuc);
-    setActiveModalSpotIndex(0);
-  };
-
-  const jumpSpot = (direction: 'prev' | 'next') => {
-    if (!activeZoneSummary?.spots.length) return;
-
-    const length = activeZoneSummary.spots.length;
-    const nextIndex =
-      direction === 'next'
-        ? (activeModalSpotIndex + 1) % length
-        : (activeModalSpotIndex - 1 + length) % length;
-
-    setActiveModalSpotIndex(nextIndex);
+    
+    setIsProcessingQR(false);
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center">
-        <div className="text-gray-600">Đang tải dữ liệu...</div>
-      </div>
-    );
+    return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><div className="animate-spin w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full"></div></div>;
   }
-
   if (loadError || !parkingLot) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-6">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-lg w-full text-center">
-          <div className="text-2xl font-bold text-gray-900 mb-2">Không thể tải bãi đỗ</div>
-          <p className="text-gray-600 mb-6">{loadError ?? 'Dữ liệu không tồn tại.'}</p>
-          <button
-            onClick={() => navigate(-1)}
-            className="px-4 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition"
-          >
-            Quay lại
-          </button>
-        </div>
-      </div>
-    );
+    return <div className="min-h-screen flex items-center justify-center">{loadError}</div>;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50">
-      <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white shadow-xl">
-        <div className="max-w-7xl mx-auto px-4 py-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate(-1)}
-              className="p-2 hover:bg-white/10 rounded-full transition"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <div>
-              <h1 className="text-3xl mb-2 tracking-tight">Chi tiết bãi đỗ</h1>
-              <p className="text-blue-100 text-sm">Thông tin chi tiết về bãi đỗ xe</p>
-            </div>
+    <div className="min-h-screen bg-gray-50 pb-20">
+      <div className="bg-gradient-to-r from-blue-700 to-indigo-800 text-white shadow-md sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-4">
+          <button onClick={() => navigate(-1)} className="p-2 hover:bg-white/10 rounded-full transition"><ArrowLeft /></button>
+          <div>
+            <h1 className="text-xl font-bold line-clamp-1">{parkingLot.name}</h1>
+            <p className="text-blue-200 text-xs">Mã: {parkingLot.communityCode}</p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-6">
-          <ImageWithFallback
-            src={parkingLot.image}
-            alt={parkingLot.name}
-            className="w-full h-96 object-cover"
-          />
-          <div className="p-4 bg-gradient-to-r from-purple-100 to-indigo-100 flex items-center justify-between">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="relative rounded-3xl overflow-hidden shadow-lg h-64 md:h-96 mb-6 group">
+          <img src={parkingLot.image} alt={parkingLot.name} className="w-full h-full object-cover group-hover:scale-105 transition duration-700" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+          <div className="absolute bottom-6 left-6 right-6 flex justify-between items-end">
             <div>
-              <div className="text-sm text-gray-600 mb-1">Mã bãi đỗ / Mã cộng đồng</div>
-              <div className="text-2xl font-bold text-purple-700">{parkingLot.communityCode}</div>
-            </div>
-            <div className="text-right">
-              <div className="text-sm text-gray-600">Tỷ lệ lấp đầy</div>
-              <div className="text-xl font-bold text-gray-900">
-                {parkingLot.totalSlots > 0
-                  ? Math.round(((parkingLot.totalSlots - parkingLot.slots) / parkingLot.totalSlots) * 100)
-                  : 0}
-                %
+              <div className="flex gap-2 mb-2">
+                <span className="bg-blue-600 text-white text-xs font-bold px-3 py-1 rounded-full">{totalAvailable} chỗ trống</span>
+                <span className="bg-yellow-500 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center"><Star className="w-3 h-3 mr-1"/> {parkingLot.rating}</span>
               </div>
+              <h2 className="text-3xl font-black text-white">{parkingLot.name}</h2>
+              <p className="text-gray-200 flex items-center mt-1 text-sm"><MapPin className="w-4 h-4 mr-1"/>{parkingLot.address}</p>
             </div>
+            <button className="bg-white/20 backdrop-blur-md text-white px-4 py-2 rounded-xl border border-white/40 hover:bg-white hover:text-blue-900 font-bold transition flex items-center gap-2">
+              <Navigation className="w-4 h-4"/> Chỉ đường
+            </button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h2 className="text-3xl font-bold text-gray-900 mb-2">{parkingLot.name}</h2>
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
-                    <div className="flex items-center gap-1">
-                      <Star className="w-4 h-4 fill-yellow-400 text-yellow-400" />
-                      <span className="font-semibold">{parkingLot.rating || 0}</span>
-                      <span className="text-gray-400">({parkingLot.reviews || 0} đánh giá)</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Clock className="w-4 h-4" />
-                      <span>{parkingLot.openingHours}</span>
-                    </div>
-                  </div>
+            <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+              <p className="text-gray-600 leading-relaxed mb-6">{parkingLot.description}</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                  <div className="text-xs text-gray-500 uppercase font-bold mb-1">Giờ mở cửa</div>
+                  <div className="font-bold text-blue-900 flex items-center gap-1"><Clock className="w-4 h-4"/> {parkingLot.openingHours}</div>
                 </div>
-                <div className="bg-green-100 text-green-700 px-4 py-2 rounded-lg font-semibold">
-                  {parkingLot.slots} chỗ trống
+                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                  <div className="text-xs text-gray-500 uppercase font-bold mb-1">Sức chứa</div>
+                  <div className="font-bold text-blue-900 flex items-center gap-1"><Car className="w-4 h-4"/> {totalCapacity} xe</div>
+                </div>
+                <div className="bg-blue-50 p-3 rounded-xl border border-blue-100 md:col-span-2">
+                  <div className="text-xs text-gray-500 uppercase font-bold mb-1">Hotline CSKH</div>
+                  <div className="font-bold text-blue-900 flex items-center gap-1"><Phone className="w-4 h-4"/> {parkingLot.phone}</div>
                 </div>
               </div>
-
-              <p className="text-gray-600 mb-4">{parkingLot.description}</p>
-
-              <div className="space-y-3">
-                <div className="flex items-start gap-3">
-                  <MapPin className="w-5 h-5 text-gray-400 mt-0.5" />
-                  <div>
-                    <div className="text-gray-900 font-medium">{parkingLot.address}</div>
-                    <button className="text-blue-600 text-sm hover:underline mt-1 flex items-center gap-1">
-                      <Navigation className="w-4 h-4" />
-                      Chỉ đường
-                    </button>
+              {facilities.length > 0 && (
+                <>
+                  <h3 className="font-bold text-lg mb-3">Tiện ích bãi đỗ</h3>
+                  <div className="flex flex-wrap gap-3">
+                    {facilities.map(f => {
+                      const Icon = resolveFacilityIcon(f.ten_tien_ich);
+                      return (
+                        <div key={f.matienich} className="flex items-center gap-2 bg-gray-50 border border-gray-200 px-3 py-2 rounded-lg text-sm font-medium text-gray-700">
+                          <Icon className="w-4 h-4 text-green-600"/> {f.ten_tien_ich}
+                        </div>
+                      )
+                    })}
                   </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Phone className="w-5 h-5 text-gray-400" />
-                  <div className="text-gray-900 font-medium">{parkingLot.phone}</div>
-                </div>
-              </div>
+                </>
+              )}
             </div>
 
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                  <MapPin className="w-6 h-6 text-blue-600" />
-                  Bản đồ bãi đỗ
-                </h3>
-                <button
-
-                  onClick={() => setShowMapModal(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                >
-                  <Eye className="w-4 h-4" />
-                  Xem chi tiết
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                {zoneSummaries.map((zone) => (
-                  <button
-                    key={zone.makhuvuc}
-                    onClick={() => {
-                      setActiveModalZoneId(zone.makhuvuc);
-                      setActiveModalSpotIndex(0);
-                    }}
-                    className="text-left bg-gradient-to-br from-blue-50 to-indigo-50 p-4 rounded-xl border-2 border-blue-200"
+            <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+              <h3 className="text-xl font-black text-gray-900 mb-4 flex items-center gap-2"><Map className="w-6 h-6 text-blue-600"/> Sơ đồ Khu vực đỗ</h3>
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide mb-4">
+                {zones.map(z => (
+                  <button 
+                    key={z.makhuvuc} 
+                    onClick={() => setActiveZoneId(z.makhuvuc)}
+                    className={`whitespace-nowrap px-5 py-3 rounded-xl font-bold border-2 transition-all ${activeZoneId === z.makhuvuc ? 'border-blue-600 bg-blue-50 text-blue-700 shadow-sm' : 'border-gray-100 bg-white text-gray-500 hover:bg-gray-50'}`}
                   >
-                    <div className="text-lg font-bold text-gray-900 mb-2">{zone.tenkhuvuc}</div>
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-gray-600">Tổng: {zone.total}</span>
-                      <span className="text-green-600 font-semibold">Trống: {zone.available}</span>
-                    </div>
-                    <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-green-500 h-2 rounded-full transition-all"
-                        style={{ width: `${zone.total > 0 ? (zone.available / zone.total) * 100 : 0}%` }}
-                      />
-                    </div>
+                    {z.is_vip && <Star className="w-4 h-4 inline-block mr-1 text-yellow-500 fill-yellow-500"/>}
+                    {z.tenkhuvuc}
                   </button>
                 ))}
               </div>
 
-              <div className="bg-gray-50 p-6 rounded-xl">
-                <div className="grid grid-cols-5 gap-3">
-                  {previewSpots.slice(0, 15).map((spot) => {
-                    const status = statusToParkingStatus(spot.trangthai);
-                    return (
-                      <div
-                        key={String(spot.mavitri)}
-                        className={`aspect-square rounded-lg flex flex-col items-center justify-center text-xs font-bold border-2 transition-all cursor-pointer ${
-                          status === 'available'
-                            ? 'bg-green-100 border-green-400 text-green-700 hover:bg-green-200'
-                            : status === 'booked'
-                              ? 'bg-red-100 border-red-400 text-red-700'
-                              : 'bg-yellow-100 border-yellow-400 text-yellow-700'
-                        }`}
-                        title={`${spot.tenvitri} - ${status === 'available' ? 'Trống' : status === 'booked' ? 'Đã đặt' : 'Đã giữ'}`}
-                        onClick={() => {
-                          const zoneIndex = zoneSummaries.findIndex((z) =>
-                            z.spots.some((s) => String(s.mavitri) === String(spot.mavitri)),
-                          );
-                          if (zoneIndex >= 0) {
-                            setActiveModalZoneId(zoneSummaries[zoneIndex].makhuvuc);
-                            setActiveModalSpotIndex(
-                              zoneSummaries[zoneIndex].spots.findIndex((s) => String(s.mavitri) === String(spot.mavitri)),
-                            );
-                            setShowMapModal(true);
-                          }
-                        }}
-                      >
-                        <div className="text-sm font-bold">{spot.tenvitri}</div>
-<div className="mt-1 text-[10px] px-2 py-0.5 rounded-full bg-white/80 text-gray-700">
-  {getSpotVehicleLabel(spot)}
-</div>
+              {activeZone && (
+                <div className="grid md:grid-cols-2 gap-6 animate-in fade-in duration-300">
+                  <div className="rounded-2xl overflow-hidden bg-gray-100 border border-gray-200 relative aspect-video">
+                    {activeZone.hinhkhuvuc ? (
+                      <img src={activeZone.hinhkhuvuc} className="w-full h-full object-cover" alt="Map"/>
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                        <Map className="w-10 h-10 mb-2 opacity-50"/>
+                        <span className="text-sm font-medium">Chưa có sơ đồ</span>
                       </div>
-                    );
-                  })}
-                </div>
-
-                <div className="flex items-center justify-center gap-6 mt-4 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-green-100 border-2 border-green-400 rounded" />
-                    <span className="text-gray-600">Trống</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-red-100 border-2 border-red-400 rounded" />
-                    <span className="text-gray-600">Đã đặt</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-4 h-4 bg-yellow-100 border-2 border-yellow-400 rounded" />
-                    <span className="text-gray-600">Đã giữ</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-2xl font-bold text-gray-900 mb-4 flex items-center gap-2">
-                <DollarSign className="w-6 h-6 text-blue-600" />
-                Bảng giá
-              </h3>
-
-              <div className="space-y-3">
-                {sortedPricing.map((item) => {
-                  const Icon = item.vehicleType === 'motorcycle' ? Bike : Car;
-
-                  return (
-                    <div
-                      key={String(item.mabanggia)}
-                      className="flex items-center justify-between p-5 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border-2 border-blue-200 hover:border-blue-400 transition-all"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="bg-blue-100 p-3 rounded-lg">
-                          <Icon className="w-6 h-6 text-blue-600" />
-                        </div>
-                        <span className="text-gray-900 font-semibold">{item.type}</span>
-                      </div>
-                      <span className="text-2xl font-bold text-blue-600">{formatPriceDisplay(item)}</span>
+                    )}
+                    <div className="absolute top-3 left-3 bg-white/90 backdrop-blur px-3 py-1 rounded-lg text-sm font-bold shadow-sm">
+                      <span className="text-gray-500">Chỗ trống:</span> <span className="text-green-600">{activeZone.availableSpots}/{activeZone.succhua_toida}</span>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
+                  </div>
 
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">Tiện ích</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {facilities.length > 0 ? (
-                  facilities.map((feature) => {
-                    const Icon = resolveFacilityIcon(feature.iconKey);
-                    return (
-                      <div
-                        key={String(feature.id)}
-                        className="flex items-center gap-3 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border-2 border-green-200"
-                      >
-                        <div className="bg-green-100 p-2 rounded-lg">
-                          <Icon className="w-5 h-5 text-green-600" />
+                  <div className="flex flex-col">
+                    <h4 className="font-bold text-gray-800 mb-2">Chính sách giá khu vực này</h4>
+                    {activePricing ? (
+                      <div className="bg-gradient-to-br from-gray-50 to-blue-50/30 rounded-2xl border border-blue-100 p-4 flex-1">
+                        <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-200">
+                          {activePricing.kieuxe === 'car' ? <Car className="w-5 h-5 text-blue-600"/> : <Bike className="w-5 h-5 text-blue-600"/>}
+                          <span className="font-black text-blue-900">{activePricing.ten_goi_gia}</span>
                         </div>
-                        <span className="text-gray-900 font-medium">{feature.name}</span>
+                        <ul className="space-y-2 text-sm text-gray-700">
+                          <li className="flex justify-between">
+                            <span className="text-gray-500">Miễn phí (Ân hạn):</span>
+                            <span className="font-bold">{activePricing.phut_an_han} phút</span>
+                          </li>
+                          <li className="flex justify-between bg-white p-2 rounded-lg border border-gray-100 shadow-sm">
+                            <span className="text-gray-500">Block đầu ({activePricing.phut_block_dau}p):</span>
+                            <span className="font-bold text-blue-600">{activePricing.gia_block_dau.toLocaleString()}đ</span>
+                          </li>
+                          <li className="flex justify-between px-2">
+                            <span className="text-gray-500">Các block sau ({activePricing.phut_block_tiep}p):</span>
+                            <span className="font-bold">+{activePricing.gia_block_tiep.toLocaleString()}đ</span>
+                          </li>
+                          <li className="flex justify-between px-2 text-purple-700">
+                            <span>Qua đêm ({activePricing.gio_bat_dau_dem}-{activePricing.gio_ket_thuc_dem}):</span>
+                            <span className="font-bold">+{activePricing.phu_phi_dem.toLocaleString()}đ</span>
+                          </li>
+                          <li className="flex justify-between px-2 text-red-600 mt-2 pt-2 border-t border-gray-200">
+                            <span>Phí kịch trần (tối đa/ngày):</span>
+                            <span className="font-black">{activePricing.phi_toi_da_ngay.toLocaleString()}đ</span>
+                          </li>
+                        </ul>
                       </div>
-                    );
-                  })
-                ) : (
-                  <div className="text-sm text-gray-500">Chưa có dữ liệu tiện ích.</div>
-                )}
-              </div>
+                    ) : (
+                      <div className="bg-gray-50 p-4 rounded-xl text-center text-sm text-gray-500 italic flex-1 border border-dashed">Khu vực này chưa cấu hình bảng giá.</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h3 className="text-2xl font-bold text-gray-900 mb-4">Đánh giá từ khách hàng</h3>
+            <div className="bg-white rounded-2xl shadow-sm p-6 border border-gray-100">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-black text-gray-900">Cộng đồng đánh giá</h3>
+                <button className="text-blue-600 font-bold text-sm hover:underline">Xem tất cả</button>
+              </div>
               <div className="space-y-4">
-                {customerReviews.map((review) => (
-                  <div key={review.id} className="border-b border-gray-200 pb-4 last:border-0">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-gray-900 font-semibold">{review.name}</div>
-                      <div className="flex items-center gap-1">
-                        {[...Array(5)].map((_, i) => (
-                          <Star
-                            key={i}
-                            className={`w-4 h-4 ${
-                              i < review.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'
-                            }`}
-                          />
-                        ))}
+                {customerReviews.map(r => (
+                  <div key={r.id} className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <div className="font-bold text-gray-900">{r.name}</div>
+                        <div className="text-xs text-gray-400">{r.date}</div>
+                      </div>
+                      <div className="flex bg-white px-2 py-1 rounded-md shadow-sm">
+                        {[...Array(5)].map((_, i) => <Star key={i} className={`w-3 h-3 ${i < r.rating ? 'fill-yellow-400 text-yellow-400' : 'text-gray-200'}`} />)}
                       </div>
                     </div>
-                    <p className="text-gray-600 text-sm mb-1">{review.comment}</p>
-                    <p className="text-xs text-gray-400">{review.date}</p>
+                    <p className="text-sm text-gray-700">{r.comment}</p>
                   </div>
                 ))}
               </div>
-              <button
-                onClick={() =>
-  navigate(`/community/reviews?lotId=${encodeURIComponent(parkingLot.id)}`)
-}
-                className="w-full mt-4 py-2 border-2 border-blue-600 text-blue-600 rounded-lg hover:bg-blue-50 transition font-medium"
-              >
-                Xem tất cả đánh giá
-              </button>
             </div>
+
           </div>
 
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-4">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Đặt chỗ ngay</h3>
-             {canManageParking && (
-  <button
-    onClick={() => navigate(`/shared/parking/${parkingLot.id}/zones`)}
-    className="w-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white py-3 rounded-lg hover:from-yellow-600 hover:to-orange-600 transition mb-3 font-semibold"
-  >
-    Đặt chỗ trước
-  </button>
-)}
-            <button
-  onClick={handleJoinCommunity}
-  className="w-full bg-gradient-to-r from-pink-500 to-purple-500 text-white py-3 rounded-lg hover:from-pink-600 hover:to-purple-600 transition mb-3 font-semibold"
->
-  Tham gia cộng đồng
-</button>
-              <button
-                onClick={() =>
-  navigate(`/community/reviews?lotId=${encodeURIComponent(parkingLot.id)}`)
-}
-                className="w-full border-2 border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-50 transition mb-3 font-semibold"
-              >
-                Viết đánh giá
+          <div className="lg:col-span-1 space-y-6">
+            <div className="sticky top-24 space-y-6">
+              
+              {/* WIDGET ĐẶT CHỖ TRƯỚC */}
+              <div className="bg-gradient-to-b from-blue-900 to-indigo-900 rounded-3xl p-1 shadow-2xl">
+                <div className="bg-white rounded-[22px] p-5 h-full">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="bg-yellow-100 p-2 rounded-lg"><Star className="w-5 h-5 text-yellow-600 fill-yellow-600"/></div>
+                    <h3 className="text-lg font-black text-gray-900">Đặt chỗ trước</h3>
+                  </div>
+
+                  {activeZone?.is_vip ? (
+                    <>
+                     {/* GIAO DIỆN CHỌN KHU VỰC & HƯỚNG DẪN */}
+                      <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 mb-4 text-sm flex flex-col gap-2">
+                        <div className="flex justify-between items-center">
+                          <span>Khu vực: <strong className="text-blue-800">{activeZone.tenkhuvuc}</strong></span>
+                          <span className="font-bold text-yellow-600 bg-yellow-100 px-2 py-1 rounded">
+                            {/* Phép tính: Hạn mức - Số chỗ VIP đang đặt */}
+                            Còn {activeZone.slotDatTruocKhaDung} slot
+                          </span>
+                        </div>
+                        {/* Nút Hướng Dẫn (dùng details/summary html5 để thu gọn, đéo cần state) */}
+                        <details className="text-[11px] text-gray-600 bg-white p-2 rounded border border-blue-100 group">
+                          <summary className="font-semibold cursor-pointer text-blue-600 flex items-center gap-1 list-none">
+                            <Info className="w-3 h-3"/> Quy định & Quyền lợi (Bấm xem)
+                          </summary>
+                          <div className="mt-2 space-y-1.5 leading-relaxed">
+                            <p>- Quý khách được giữ chỗ trong vòng <strong>24h</strong>.</p>
+                            <p>- Vui lòng có mặt tại bãi trong 24h này. Sau khi vào bãi, hệ thống tính thời gian đỗ theo block đã mua.</p>
+                            <p>- Đỗ vượt quá block đã mua sẽ phát sinh phụ phí khi ra cổng.</p>
+                            <p className="text-red-600 font-medium">- Lần đầu sử dụng: Vui lòng vào đúng khu vực đặt trước và quét QR tại bãi để hệ thống đồng bộ dữ liệu.</p>
+                          </div>
+                        </details>
+                      </div>
+
+                      {activeZone.slotDatTruocKhaDung > 0 ? (
+                        <>
+                          <div className="mb-4">
+                            <label className="text-sm font-bold text-gray-700 block mb-2">Thời gian dự kiến đỗ:</label>
+                            <div className="flex bg-gray-100 rounded-xl p-1">
+                              {[0, 1, 2, 4].map(b => (
+                                <button 
+                                  key={b} onClick={() => setBookingBlocks(b)}
+                                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition ${bookingBlocks === b ? 'bg-white shadow-sm text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                  +{b} block
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-100 space-y-2 text-sm">
+                            <div className="flex justify-between text-gray-600">
+                              <span>Tổng thời gian giữ:</span>
+                              <span className="font-bold text-gray-900">{bookingInfo.mins} phút</span>
+                            </div>
+                            <div className="flex justify-between text-gray-600">
+                              <span>Tiền đỗ xe:</span>
+                              <span className="font-bold text-gray-900">{bookingInfo.price.toLocaleString()}đ</span>
+                            </div>
+                            <div className="flex justify-between text-gray-600 border-b border-gray-200 pb-2">
+                              <span>Phí nền tảng (giữ chỗ):</span>
+                              <span className="font-bold text-gray-900">{bookingInfo.fee.toLocaleString()}đ</span>
+                            </div>
+                            <div className="flex justify-between pt-1">
+                              <span className="font-black text-gray-900">TỔNG CỘNG:</span>
+                              <span className="font-black text-blue-600 text-lg">{bookingInfo.total.toLocaleString()}đ</span>
+                            </div>
+                          </div>
+
+                          <button 
+                            onClick={() => handleInitiatePayment('BOOKING', bookingInfo.total)}
+                            className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-black py-4 rounded-xl hover:shadow-lg hover:scale-[1.02] transition-all"
+                          >
+                            THANH TOÁN ĐẶT CHỖ
+                          </button>
+                        </>
+                      ) : (
+                        <div className="bg-red-50 text-red-600 p-4 rounded-xl text-center font-bold border border-red-200">
+                          Rất tiếc, khu vực này đã hết hạn mức đặt chỗ trước!
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-center py-6">
+                      <div className="bg-gray-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <AlertCircle className="w-8 h-8 text-gray-400"/>
+                      </div>
+                      <p className="text-sm text-gray-500 font-medium">Khu vực này là khu thường, KHÔNG hỗ trợ đặt chỗ trước.</p>
+                      <p className="text-xs text-gray-400 mt-1">Vui lòng đến trực tiếp bãi đỗ (hiện còn <strong className="text-green-600">{activeZone?.availableSpots}</strong> chỗ trống).</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* WIDGET THẺ DÀI HẠN */}
+              {cards.length > 0 && (
+                <div className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100">
+                  <div className="flex items-center gap-2 mb-4">
+                    <CreditCard className="w-5 h-5 text-purple-600"/>
+                    <h3 className="text-lg font-black text-gray-900">Đăng ký Thẻ Dài Hạn</h3>
+                  </div>
+                  {/* Hướng dẫn thẻ dài hạn */}
+                    <details className="text-[11px] text-gray-600 bg-purple-50 p-2 rounded-xl border border-purple-100 group">
+                      <summary className="font-semibold cursor-pointer text-purple-700 flex items-center gap-1 list-none">
+                        <Info className="w-3 h-3"/> Quyền lợi Thẻ (Bấm xem)
+                      </summary>
+                      <div className="mt-2 space-y-1.5 leading-relaxed">
+                        <p>- Sử dụng <strong>TẤT CẢ</strong> khu vực (thường & VIP) không giới hạn thời gian.</p>
+                        <p>- <strong>Lưu ý:</strong> Hệ thống đảm bảo 100% chỗ cho khách mua thẻ. Nhưng nếu TOÀN BỘ bãi đã đầy vật lý, sẽ không thể cung cấp chỗ.</p>
+                        <p className="text-red-600 font-medium">- Lần đầu đến bãi: Vui lòng quét QR tại cổng để hệ thống đồng bộ thẻ.</p>
+                      </div>
+                    </details>
+                  <div className="space-y-3">
+                    {cards.map(c => (
+                      <button 
+                        key={c.mathe}
+                        onClick={() => handleInitiatePayment('CARD', c.gia_tien, c.mathe)}
+                        className="w-full flex items-center justify-between p-3 rounded-xl border border-gray-200 hover:border-purple-400 hover:bg-purple-50 transition group text-left"
+                      >
+                        <div>
+                          <div className="font-bold text-gray-900 group-hover:text-purple-700 transition">Thẻ {c.loaithe === 'thang'?'Tháng':'Quý'} {c.loaixe === 'car'?'🚗':'🏍'}</div>
+                          <div className="text-xs text-gray-500">Kích hoạt ngay bằng VietQR</div>
+                        </div>
+                        <div className="font-black text-purple-600">{c.gia_tien.toLocaleString()}đ</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button onClick={handleJoinCommunity} className="w-full bg-white border-2 border-dashed border-gray-300 text-gray-600 font-bold py-4 rounded-2xl hover:border-blue-500 hover:text-blue-600 transition flex items-center justify-center gap-2">
+                <Shield className="w-5 h-5"/> Tham gia nhóm cư dân bãi đỗ
               </button>
-              <button
-                onClick={() => navigate(-1)}
-                className="w-full border-2 border-gray-300 text-gray-700 py-3 rounded-lg hover:bg-gray-50 transition font-semibold"
-              >
-                Quay lại
-              </button>
+
             </div>
           </div>
         </div>
       </div>
 
-      {showMapModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-6xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 flex items-center justify-between gap-4">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">Bản đồ chi tiết - {parkingLot.name}</h2>
-                <p className="text-sm text-gray-500 mt-1">Điều hướng giữa các ô để xem chi tiết từng vị trí.</p>
-              </div>
-              <button
-                onClick={() => setShowMapModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-lg transition"
+  {/* MODAL QUÉT QR */}
+      {(showBookingModal || showQRModal) && currentOrderCode && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[9999] flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-gradient-to-r from-blue-700 to-indigo-800 p-5 text-white relative">
+              <button 
+                onClick={() => {
+                  setShowBookingModal(false); setShowQRModal(null); setCurrentOrderCode(null); setPayosQrData(null); setPaymentSuccess(false);
+                }} 
+                className="absolute top-4 right-4 bg-white/20 p-1.5 rounded-full hover:bg-white/40"
               >
-                <span className="text-2xl text-gray-600">×</span>
+                <X className="w-5 h-5"/>
               </button>
+              <h2 className="text-xl font-black mb-1">Thanh toán tự động</h2>
+              <p className="text-sm text-blue-200">{showQRModal ? showQRModal.type : 'Đặt chỗ trước (Booking)'}</p>
             </div>
 
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {zoneSummaries.map((zone) => (
-                  <button
-                    key={String(zone.makhuvuc)}
-                    onClick={() => {
-                      setActiveModalZoneId(zone.makhuvuc);
-                      setActiveModalSpotIndex(0);
-                    }}
-                    className={`text-left bg-gradient-to-br from-blue-50 to-indigo-50 p-5 rounded-xl border-2 transition ${
-                      String(activeModalZoneId) === String(zone.makhuvuc)
-                        ? 'border-blue-500 shadow-md'
-                        : 'border-blue-200 hover:border-blue-300'
-                    }`}
-                  >
-                    <div className="text-xl font-bold text-gray-900 mb-3">{zone.tenkhuvuc}</div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-gray-600">Tổng: {zone.total}</span>
-                      <span className="text-green-600 font-bold">Trống: {zone.available}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-xs text-gray-500 mb-2">
-                      <span>Đã đặt: {zone.booked}</span>
-                      <span>Đã giữ: {zone.reserved}</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                      <div
-                        className="bg-green-500 h-3 rounded-full transition-all"
-                        style={{ width: `${zone.total > 0 ? (zone.available / zone.total) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </button>
-                ))}
+            <div className="p-6">
+              <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100 text-center">
+                <div className="text-sm text-gray-500 mb-1">Số tiền cần thanh toán</div>
+                <div className="text-3xl font-black text-blue-600 mb-3">
+                  {(showQRModal ? showQRModal.amount : bookingInfo.total).toLocaleString()} VNĐ
+                </div>
+                <div className="text-sm font-bold text-gray-700 bg-white p-2 rounded-lg inline-block border shadow-sm">
+                  {showQRModal ? showQRModal.desc : `Giữ chỗ ${bookingInfo.mins}p - Khu ${activeZone?.tenkhuvuc}`}
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-gray-50 p-6 rounded-xl">
-                  <div className="flex items-center justify-between mb-4">
-                    <div>
-                      <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                        <MapPin className="w-5 h-5 text-blue-600" />
-                        Bản đồ khu vực
-                      </h3>
-                      <p className="text-sm text-gray-500 mt-1">Nhấp vào từng ô vuông để xem thông tin riêng.</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => jumpZone('prev')}
-                        className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
-                      >
-                        <ChevronLeft className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => jumpZone('next')}
-                        className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
-                      >
-                        <ChevronRight className="w-4 h-4" />
-                      </button>
-                    </div>
+              <div className="flex flex-col items-center">
+                {paymentSuccess ? (
+                  <div className="py-8 flex flex-col items-center justify-center animate-in zoom-in duration-300">
+                    <CheckCircle className="w-20 h-20 text-green-500 mb-4" />
+                    <h3 className="text-xl font-black text-green-600">THANH TOÁN THÀNH CÔNG!</h3>
+                    <p className="text-sm text-gray-500 mt-2">Đang tự động chuyển hướng...</p>
                   </div>
-
-                  {activeZoneSummary ? (
-                    activeZoneSummary.spots.length > 0 ? (
-                      <div className="grid grid-cols-5 gap-4">
-                        {activeZoneSummary.spots.map((spot, idx) => {
-                          const status = statusToParkingStatus(spot.trangthai);
-                          const meta = statusMeta[status as keyof typeof statusMeta] ?? statusMeta.unknown;
-                          const active = idx === activeModalSpotIndex;
-
-                          return (
-                    <button
-  key={String(spot.mavitri)}
-  onClick={() => setActiveModalSpotIndex(idx)}
-  className={`aspect-square rounded-xl flex items-center justify-center border-2 transition-all cursor-pointer
-    ${active
-      ? 'ring-2 ring-blue-500 border-blue-500 shadow-md'
-      : ''
-    }
-    ${status === 'available'
-      ? 'bg-green-50 border-green-400 hover:bg-green-100'
-      : status === 'booked'
-      ? 'bg-red-50 border-red-400'
-      : 'bg-yellow-50 border-yellow-400'
-    }`}
->
-  <div className="flex flex-col items-center justify-center gap-1">
-    
-    {/* TÊN Ô */}
-    <div className="text-sm font-bold text-gray-900">
-      {spot.tenvitri || `Ô ${idx + 1}`}
-    </div>
-
-    {/* LOẠI XE */}
-    <div className="text-[10px] px-2 py-0.5 rounded-full bg-white/80 text-gray-700">
-      {getSpotVehicleLabel(spot)}
-    </div>
-
-    {/* CHẤM TRẠNG THÁI */}
-    <div
-      className={`w-2 h-2 rounded-full ${
-        status === 'available'
-          ? 'bg-green-500'
-          : status === 'reserved'
-          ? 'bg-yellow-500'
-          : 'bg-red-500'
-      }`}
-    />
-  </div>
-</button>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <div className="text-sm text-gray-500">Khu vực này chưa có ô nào.</div>
-                    )
-                  ) : (
-                    <div className="text-sm text-gray-500">Chưa chọn khu vực.</div>
-                  )}
-                </div>
-
-                <div className="bg-white border border-gray-200 rounded-xl p-6">
-                  {activeZoneSummary && activeZoneSummary.spots.length > 0 ? (
-                    activeSpot ? (
-                      <div className="space-y-5">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <h3 className="text-xl font-bold text-gray-900">
-                              {activeZoneSummary.tenkhuvuc}
-                            </h3>
-                            <p className="text-sm text-gray-500 mt-1">{activeZoneSummary.mota || 'Không có mô tả.'}</p>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => jumpSpot('prev')}
-                              className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
-                            >
-                              <ChevronLeft className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => jumpSpot('next')}
-                              className="p-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
-                            >
-                              <ChevronRight className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-lg font-bold text-gray-900">
-                            {activeSpot.tenvitri}
-                          </h4>
-                          {(() => {
-                            const status = statusToParkingStatus(activeSpot.trangthai);
-                            const meta = statusMeta[status as keyof typeof statusMeta] ?? statusMeta.unknown;
-                            return (
-                              <span
-                                className={`px-3 py-1 rounded-full text-sm font-semibold ${meta.bg} ${meta.text}`}
-                              >
-                                {meta.label}
-                              </span>
-                            );
-                          })()}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4 text-sm">
-                          <div className="p-4 rounded-xl bg-gray-50">
-  <div className="text-gray-500">Loại xe</div>
-  <div className="font-semibold text-gray-900 mt-1">
-    {activeSpot?.mabanggia
-      ? pricingMap.get(String(activeSpot.mabanggia))?.type ?? ''
-      : ''}
-  </div>
-</div>
-                          <div className="p-4 rounded-xl bg-gray-50">
-                            <div className="text-gray-500">Trạng thái</div>
-                            <div className="font-semibold text-gray-900 mt-1">
-                              {
-                                (statusMeta[
-                                  statusToParkingStatus(activeSpot.trangthai) as keyof typeof statusMeta
-                                ] ?? statusMeta.unknown).label
-                              }
-                            </div>
-                          </div>
-                          <div className="p-4 rounded-xl bg-gray-50 col-span-2">
-                            <div className="text-gray-500">Loại xe hỗ trợ trong khu vực</div>
-                            <div className="font-semibold text-gray-900 mt-2 flex flex-wrap gap-2">
-                           {activeZoneSummary.supportedPricingIds.length > 0 ? (
-  activeZoneSummary.supportedPricingIds.map((pricingId) => {
-    const priceRow = pricing.find((p) => String(p.mabanggia) === String(pricingId));
-    const label = priceRow?.type ?? pricingId;
-
-    return (
-      <span
-        key={pricingId}
-        className="px-3 py-1 rounded-full bg-blue-100 text-blue-700 text-xs font-semibold"
-      >
-        {label}
-      </span>
-    );
-  })
-) : (
-  <span className="text-gray-500 font-normal">Chưa cấu hình</span>
-)}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="space-y-3">
-                          <div className="text-sm font-semibold text-gray-700">Bảng giá liên kết</div>
-                          <div className="grid grid-cols-1 gap-3">
-                            {sortedPricing.length > 0 ? (
-                              sortedPricing.map((item) => {
-                              const isSupported =
-  activeZoneSummary.supportedPricingIds.length === 0 ||
-  activeZoneSummary.supportedPricingIds.includes(String(item.mabanggia));
-
-                                return (
-                                  <div
-                                    key={String(item.mabanggia)}
-                                    className={`rounded-xl border p-4 flex items-center justify-between ${
-                                      isSupported ? 'border-blue-200 bg-blue-50' : 'border-gray-200 bg-gray-50'
-                                    }`}
-                                  >
-                                    <div>
-                                      <div className="font-semibold text-gray-900">{item.type}</div>
-                                      <div className="text-xs text-gray-500 mt-1">
-                                        {item.priceType === 'hourly'
-                                          ? 'Theo giờ'
-                                          : item.priceType === 'daily'
-                                            ? 'Theo ngày'
-                                            : 'Cố định'}
-                                      </div>
-                                    </div>
-                                    <div className="text-right">
-                                      <div className="font-bold text-blue-600">{formatPriceDisplay(item)}</div>
-                                    </div>
-                                  </div>
-                                );
-                              })
-                            ) : (
-                              <div className="text-sm text-gray-500">Chưa có bảng giá.</div>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-sm text-gray-500">Không có dữ liệu vị trí.</div>
-                    )
-                  ) : (
-                    <div className="text-sm text-gray-500">Chọn một ô để xem chi tiết.</div>
-                  )}
-                </div>
+                ) : isProcessingQR || !payosQrData ? (
+                  <div className="py-12 flex flex-col items-center justify-center">
+                    <div className="animate-spin w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full mb-4"></div>
+                    <p className="text-gray-500 font-medium">Đang khởi tạo mã QR từ PayOS...</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="p-2 border-4 border-blue-100 rounded-2xl bg-white shadow-lg relative">
+                      <img 
+                        src={`https://img.vietqr.io/image/${payosQrData.bin}-${payosQrData.accountNo}-compact2.png?amount=${payosQrData.amount}&addInfo=${encodeURIComponent(payosQrData.description)}`}
+                        alt="PayOS QR" 
+                        className="w-48 h-48 object-contain rounded-xl"
+                      />
+                      <div className="absolute top-0 left-0 right-0 h-1 bg-blue-500 shadow-[0_0_10px_#3b82f6] animate-[scan_2s_ease-in-out_infinite]" />
+                    </div>
+                    
+                    <div className="mt-6 flex items-start gap-3 bg-blue-50 text-blue-800 p-3 rounded-xl text-sm leading-relaxed">
+                      <Info className="w-5 h-5 shrink-0 mt-0.5"/>
+                      <p>Mở App Ngân hàng quét mã. <strong>Hệ thống đang chờ nhận thanh toán...</strong></p>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           </div>
         </div>
       )}
+
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes scan {
+          0% { top: 0; opacity: 0; }
+          10% { opacity: 1; }
+          90% { opacity: 1; }
+          100% { top: 100%; opacity: 0; }
+        }
+      `}} />
     </div>
   );
 };

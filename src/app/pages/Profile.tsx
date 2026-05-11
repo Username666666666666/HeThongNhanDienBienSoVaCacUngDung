@@ -14,6 +14,7 @@ import {
   UserRound,
   Eye,
   EyeOff,
+  Clock,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../utils/supabase.ts';
@@ -115,6 +116,7 @@ export const Profile = () => {
   const [editEmail, setEditEmail] = useState('');
   const [editPhone, setEditPhone] = useState('');
   const [editAddress, setEditAddress] = useState('');
+  const [demoMode, setDemoMode] = useState('normal');
 
   const [showPinModal, setShowPinModal] = useState(false);
   const [showPinValue, setShowPinValue] = useState(false);
@@ -208,11 +210,15 @@ export const Profile = () => {
       setEditEmail(merged.email);
       setEditPhone(merged.sodt);
       setEditAddress(merged.diachi);
+      const { data: demoRow } = await supabase.from('cauhinh_demo').select('time_option').eq('id', 1).maybeSingle();
+      if (demoRow) setDemoMode(demoRow.time_option);
       setAvatarPreview(formatAvatarUrl(merged.anhdaidien));
     } finally {
       setLoading(false);
     }
   };
+
+
 
   useEffect(() => {
     void loadProfile();
@@ -428,7 +434,7 @@ export const Profile = () => {
         toast.error('Không thể cập nhật chi tiết hồ sơ');
         return;
       }
-
+      await supabase.from('cauhinh_demo').upsert({ id: 1, time_option: demoMode });
       setEditing(false);
       toast.success('Đã lưu hồ sơ');
       await loadProfile();
@@ -722,7 +728,27 @@ export const Profile = () => {
               </div>
             )}
           </div>
-
+           {/* ================= BẮT ĐẦU CHÈN UI CHỌN DEMO TẠI ĐÂY ================= */}
+          <div className="mt-6 p-5 border-2 border-dashed border-indigo-300 bg-indigo-50 rounded-2xl">
+            <label className="block text-sm font-bold text-indigo-900 mb-2 flex items-center gap-2">
+              <Clock className="w-5 h-5" />
+              Chế độ thời gian Test (Demo)
+            </label>
+            <select
+              disabled={!editing}
+              value={demoMode}
+              onChange={(e) => setDemoMode(e.target.value)}
+              className="w-full px-4 py-3 rounded-xl border border-indigo-200 bg-white disabled:bg-gray-100 focus:ring-2 focus:ring-indigo-500 outline-none font-semibold text-indigo-800"
+            >
+              <option value="normal">⏱ Bình thường (Thực tế - Phút/Tháng/Quý)</option>
+              <option value="30s">⚡ Test nhanh: 30 Giây</option>
+              <option value="1m">⚡ Test nhanh: 1 Phút</option>
+              <option value="5m">⚡ Test nhanh: 5 Phút</option>
+            </select>
+            <p className="text-xs text-indigo-600 mt-2 font-medium">
+              * Mở khóa chỉnh sửa để thay đổi. Khi lưu, thời gian này sẽ được áp dụng ngay lập tức cho các giao dịch thanh toán. Ai cũng xem được.
+            </p>
+          </div>
           <div className="mt-6 flex flex-col md:flex-row gap-3">
             {editing ? (
               <>

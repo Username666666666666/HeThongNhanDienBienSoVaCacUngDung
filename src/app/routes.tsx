@@ -17,7 +17,7 @@ import { ParkingLotDetails } from "./pages/owner/ParkingLotDetails.tsx";
 import { ParkingZoneSelection } from "./pages/owner/ParkingZoneSelection.tsx";
 import { VehicleTypeSelection } from "./pages/owner/VehicleTypeSelection.tsx";
 import { SpotSelection } from "./pages/owner/SpotSelection.tsx";
-import { VehicleStatus } from "./pages/owner/VehicleStatus.tsx";
+import { InvoiceManagement } from "./pages/owner/InvoiceManagement.tsx";
 import { ParkingRegistration } from "./pages/owner/ParkingRegistration.tsx";
 import { TopUpCoins } from "./pages/owner/TopUpCoins.tsx";
 import { VehicleEntryExitLog as OwnerVehicleEntryExitLog } from "./pages/owner/VehicleEntryExitLog.tsx";
@@ -278,11 +278,11 @@ export const router = createBrowserRouter([
     ),
     errorElement: <ErrorBoundary />,
   },
-  {
-    path: "/owner/vehicle-status",
+{
+    path: "/owner/invoices",
     element: (
       <Guard allowedRoles={OWNER_ROLES}>
-        <VehicleStatus />
+        <InvoiceManagement />
       </Guard>
     ),
     errorElement: <ErrorBoundary />,

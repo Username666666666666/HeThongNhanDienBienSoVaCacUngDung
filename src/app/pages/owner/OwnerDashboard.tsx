@@ -412,10 +412,10 @@ export const OwnerDashboard = () => {
         iconWrap: 'bg-white/20',
       },
       {
-        title: 'Quản lý phương tiện',
-        desc: 'Xem trạng thái phương tiện',
-        icon: Settings2,
-        onClick: () => navigate('/owner/vehicle-status'),
+        title: 'Hóa đơn & Dịch vụ',
+        desc: 'Quản lý giao dịch, thẻ, đặt chỗ',
+        icon: ClipboardList, // Đổi icon Settings2 thành ClipboardList
+        onClick: () => navigate('/owner/invoices'),
         className: 'bg-gradient-to-br from-violet-500 to-fuchsia-600',
         iconWrap: 'bg-white/20',
       },
